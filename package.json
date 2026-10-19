@@ -1,0 +1,36 @@
+{
+  "name": "complynexus-lite-poc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ComplyNexus Lite POC sprint 0: record domain, guided self-test, verify page",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=20.11" },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint src test",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest",
+    "dev": "tsx src/server.ts",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.39.0",
+    "dotenv": "16.4.5",
+    "express": "4.21.2",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.15.0",
+    "@types/express": "4.17.21",
+    "@types/node": "20.17.9",
+    "@types/supertest": "6.0.2",
+    "@vitest/coverage-v8": "2.1.9",
+    "eslint": "9.15.0",
+    "supertest": "7.0.0",
+    "tsx": "4.19.2",
+    "typescript": "5.6.3",
+    "typescript-eslint": "8.15.0",
+    "vitest": "2.1.9"
+  }
+}
