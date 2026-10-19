@@ -31,7 +31,7 @@ export function guidedRoutes(deps: AppDeps): Router {
     if (!assessment) throw new DomainError('ASSESSMENT_REQUIRED');
     const existing = await recordForAgent(deps, agent.id);
     if (existing?.status === 'Revoked') throw new DomainError('RECORD_REVOKED');
-    const runNumber = (await deps.repos.runs.find((r) => r.agentId === agent.id)).length + 1;
+    const runNumber = (await deps.repos.runs.find((r) => r.agentId === agent.id, { agentId: agent.id })).length + 1;
     const run = startGuidedRun({ agent, size: body.size, runNumber, now: deps.clock.now(), library: loadLibrary() });
     await deps.repos.runs.insert(run);
     res.status(201).json(run);

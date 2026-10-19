@@ -17,8 +17,12 @@ export class InMemoryRepository<T extends { id: string }> implements Repository<
     this.items.set(item.id, structuredClone(item));
     return structuredClone(item);
   }
-  async find(pred: (t: T) => boolean): Promise<T[]> {
-    return [...this.items.values()].filter(pred).map((x) => structuredClone(x));
+  async find(pred: (t: T) => boolean, where?: Partial<T>): Promise<T[]> {
+    const entries = Object.entries(where ?? {}) as [keyof T, unknown][];
+    return [...this.items.values()]
+      .filter((x) => entries.every(([k, v]) => x[k] === v))
+      .filter(pred)
+      .map((x) => structuredClone(x));
   }
   async count(): Promise<number> {
     return this.items.size;

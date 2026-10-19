@@ -8,7 +8,7 @@ import { countByStatus, priorityLabel, readinessScore, riskBand } from '../../do
 import { CONTROLS, getControl } from '../../domain/controls';
 import { applyAgentChange, applyReassessment, createAssessedRecord } from '../../domain/record';
 import type { Agent, Assessment } from '../../domain/types';
-import { nextRecordId, uuid } from '../../infra/ids';
+import { uuid } from '../../infra/ids';
 
 export function agentRoutes(deps: AppDeps): Router {
   const router = asyncRouter();
@@ -58,8 +58,7 @@ export function agentRoutes(deps: AppDeps): Router {
     if (existing) {
       await deps.repos.records.update(applyReassessment(existing, { assessment, openItems, now }));
     } else {
-      const seq = (await deps.repos.records.count()) + 1;
-      const recordId = nextRecordId(now.getUTCFullYear(), seq);
+      const recordId = await deps.recordIds.next(now.getUTCFullYear());
       await deps.repos.records.insert(createAssessedRecord({ agent, assessment, openItems, ids: { recordId }, now }));
     }
     res.status(201).json(await assessmentView(assessment));

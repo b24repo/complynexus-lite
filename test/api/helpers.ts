@@ -5,6 +5,7 @@ import type { AppDeps } from '../../src/api/deps';
 import { getCase } from '../../src/library/library';
 import { RuleBasedGrader } from '../../src/grading/ruleBased';
 import { FixedClock } from '../../src/infra/clock';
+import { InMemoryRecordIdSource } from '../../src/infra/ids';
 import { InMemoryRepository } from '../../src/infra/repo/inMemory';
 import { agentBody, allInPlaceAnswers, bookbotAnswers } from '../fixtures/bookbot';
 import { entriesFor } from '../fixtures/replies';
@@ -21,6 +22,7 @@ export function setup(start = '2026-12-01T00:00:00Z') {
       runs: new InMemoryRepository(),
       records: new InMemoryRepository(),
     },
+    recordIds: new InMemoryRecordIdSource(),
     clock,
     grader: new RuleBasedGrader(),
     adminKey: ADMIN_KEY,
