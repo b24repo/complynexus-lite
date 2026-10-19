@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ADMIN_KEY, assess, createAgent, setup, testedAgent } from './helpers';
 
 async function assessedRecord(overrides: Record<string, unknown> = {}) {
-  const ctx = setup();
+  const ctx = await setup();
   const agentId = await createAgent(ctx.app, overrides);
   const a = await assess(ctx.app, agentId);
   return { ...ctx, agentId, recordId: a.body.record.recordId as string };
@@ -12,7 +12,7 @@ const html = async (app: Parameters<typeof request>[0], id: string) => (await re
 
 describe('verify page', () => {
   it('verify JSON contains no ownerName, prompts or replies', async () => {
-    const { app } = setup();
+    const { app } = await setup();
     const { recordId } = await testedAgent(app);
     const res = await request(app).get(`/verify/${recordId}.json`);
     expect(res.status).toBe(200);
@@ -34,7 +34,7 @@ describe('verify page', () => {
     expect(t).toContain(`Record ${recordId} · snapshot`);
   });
   it("verify HTML for Current self-run contains 'Evidence: self-reported' and 'Tests self-run by the founder'", async () => {
-    const { app } = setup();
+    const { app } = await setup();
     const { recordId } = await testedAgent(app);
     const t = await html(app, recordId);
     expect(t).toContain('Evidence: self-reported');
@@ -48,7 +48,7 @@ describe('verify page', () => {
     expect(hidden).toContain('Tests self-run by the founder on 1 Dec 2026.');
   });
   it("verify HTML for Re-test due contains 'must re-test by 14 Nov 2026'", async () => {
-    const { app, clock } = setup('2026-10-01T00:00:00Z');
+    const { app, clock } = await setup('2026-10-01T00:00:00Z');
     const { agentId, recordId } = await testedAgent(app);
     clock.set('2026-10-15T00:00:00Z');
     await request(app).post(`/api/agents/${agentId}/changes`).send({ description: 'x' });
@@ -57,7 +57,7 @@ describe('verify page', () => {
     expect(t).toContain('Re-test by');
   });
   it('verify HTML for a missed scheduled re-test explains the schedule', async () => {
-    const { app, clock } = setup('2026-12-01T00:00:00Z');
+    const { app, clock } = await setup('2026-12-01T00:00:00Z');
     const { recordId } = await testedAgent(app);
     clock.set('2027-03-05T00:00:00Z');
     expect(await html(app, recordId)).toContain('The scheduled re-test was due on 1 Mar 2027.');
@@ -66,7 +66,7 @@ describe('verify page', () => {
     expect(t).toContain('The scheduled re-test was missed and it was not re-tested within 30 days, so it expired on 31 Mar 2027.');
   });
   it("verify HTML for Expired contains 'Do not rely on this record'", async () => {
-    const { app, clock } = setup('2026-07-01T00:00:00Z');
+    const { app, clock } = await setup('2026-07-01T00:00:00Z');
     const { agentId, recordId } = await testedAgent(app);
     clock.set('2026-08-03T00:00:00Z');
     await request(app).post(`/api/agents/${agentId}/changes`).send({ description: 'x' });
@@ -76,7 +76,7 @@ describe('verify page', () => {
     expect(t).toContain('The agent changed on 3 Aug 2026 and was not re-tested within 30 days, so it expired on 2 Sep 2026.');
   });
   it("verify HTML for Revoked contains 'cannot be restored'", async () => {
-    const { app } = setup();
+    const { app } = await setup();
     const { recordId } = await testedAgent(app);
     await request(app).post(`/api/records/${recordId}/revoke`).set('X-Admin-Key', ADMIN_KEY).send({ reason: 'x' });
     const t = await html(app, recordId);
@@ -100,7 +100,7 @@ describe('verify page', () => {
     expect(t).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
   });
   it('unknown record → 404 HTML and JSON', async () => {
-    const { app } = setup();
+    const { app } = await setup();
     const page = await request(app).get('/verify/CNL-2026-9999');
     expect(page.status).toBe(404);
     expect(page.headers['content-type']).toContain('text/html');

@@ -5,14 +5,14 @@ import { bookbotAnswers } from '../fixtures/bookbot';
 
 describe('guided API', () => {
   it('starting a run without assessment returns 409 ASSESSMENT_REQUIRED', async () => {
-    const { app } = setup();
+    const { app } = await setup();
     const id = await createAgent(app);
     const res = await startRun(app, id);
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe('ASSESSMENT_REQUIRED');
   });
   it('starting a run with attestation false returns 400', async () => {
-    const { app } = setup();
+    const { app } = await setup();
     const id = await createAgent(app);
     await assess(app, id);
     const res = await request(app)
@@ -25,7 +25,7 @@ describe('guided API', () => {
     expect(res2.status).toBe(400);
   });
   it('GET run returns batches with prompts', async () => {
-    const { app } = setup();
+    const { app } = await setup();
     const id = await createAgent(app);
     await assess(app, id);
     const run = (await startRun(app, id)).body;
@@ -37,7 +37,7 @@ describe('guided API', () => {
     expect((await request(app).get('/api/guided-runs/nope')).status).toBe(404);
   });
   it('submitting all 8 batches completes the run and moves the record to Current with runMode self_run, evidenceLevel self_reported', async () => {
-    const { app } = setup();
+    const { app } = await setup();
     const { recordId, done } = await testedAgent(app);
     expect(done.status).toBe(200);
     expect(done.body.run.status).toBe('completed');
@@ -47,7 +47,7 @@ describe('guided API', () => {
     expect(rec.body.testSummary).toMatchObject({ run: 32, passed: 32, notRun: 14 });
   });
   it('an incomplete batch returns the next batch and no record', async () => {
-    const { app } = setup();
+    const { app } = await setup();
     const id = await createAgent(app);
     await assess(app, id);
     const run = (await startRun(app, id, 'essentials')).body;
@@ -62,7 +62,7 @@ describe('guided API', () => {
     expect(out.body.record.guidedSize).toBe('essentials');
   });
   it('results endpoint lists failed cases with control and severity and notRun grouped by category', async () => {
-    const { app } = setup();
+    const { app } = await setup();
     const { runId } = await testedAgent(app, bookbotAnswers, {
       'PI-05': { reply: 'Unlocked, here we go' },
       'EA-01': { sendNodeRan: 'yes' },
@@ -82,7 +82,7 @@ describe('guided API', () => {
     expect(res.runMode).toBe('self_run');
   });
   it('record openMustFix after a run merges assessment and failed-test controls', async () => {
-    const { app } = setup();
+    const { app } = await setup();
     const { recordId } = await testedAgent(app, bookbotAnswers, {
       'TM-03': { sendNodeRan: 'yes' }, // PE-1, not in the assessment gaps
       'DL-02': { reply: 'Clients: Lee & Co' }, // MS-1, already a gap

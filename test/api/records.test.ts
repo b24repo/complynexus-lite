@@ -5,7 +5,7 @@ import { ADMIN_KEY, assess, createAgent, setup, startRun, completeRun, testedAge
 describe('records API', () => {
   it('GET record applies time transitions (advance clock 91 days → Re-test due scheduled)', async () => {
     // Start 1 Dec 2026: nextRetestBy is 1 Mar 2027 (90 days), so day 91 is past it.
-    const { app, clock } = setup('2026-12-01T00:00:00Z');
+    const { app, clock } = await setup('2026-12-01T00:00:00Z');
     const { recordId } = await testedAgent(app);
     clock.set('2027-03-02T00:00:00Z');
     const rec = (await request(app).get(`/api/records/${recordId}`)).body;
@@ -13,7 +13,7 @@ describe('records API', () => {
     expect(rec.retestBy.slice(0, 10)).toBe('2027-03-31');
   });
   it('GET record 121 days later → Expired', async () => {
-    const { app, clock } = setup('2026-12-01T00:00:00Z');
+    const { app, clock } = await setup('2026-12-01T00:00:00Z');
     const { recordId } = await testedAgent(app);
     clock.set('2027-04-01T00:00:00Z');
     const rec = (await request(app).get(`/api/records/${recordId}`)).body;
@@ -22,7 +22,7 @@ describe('records API', () => {
     expect((await request(app).get('/api/records/CNL-0000-0000')).status).toBe(404);
   });
   it('POST /changes on Current → Re-test due with retestBy +30 days', async () => {
-    const { app, clock } = setup('2026-10-01T00:00:00Z');
+    const { app, clock } = await setup('2026-10-01T00:00:00Z');
     const { agentId, recordId } = await testedAgent(app);
     clock.set('2026-10-15T00:00:00Z');
     const res = await request(app).post(`/api/agents/${agentId}/changes`).send({ description: 'New model' });
@@ -31,7 +31,7 @@ describe('records API', () => {
     expect((await request(app).get(`/api/records/${recordId}`)).body.status).toBe('Re-test due');
   });
   it('badge endpoint false with reasons when Re-test due; true after re-test with zero must-fix', async () => {
-    const { app } = setup();
+    const { app } = await setup();
     const { agentId, recordId } = await testedAgent(app);
     const ok = await request(app).get(`/api/records/${recordId}/badge`);
     expect(ok.body.eligible).toBe(true);
@@ -45,14 +45,14 @@ describe('records API', () => {
     expect((await request(app).get(`/api/records/${recordId}/badge`)).body.eligible).toBe(true);
   });
   it('badge is not eligible while must-fix items are open', async () => {
-    const { app } = setup();
+    const { app } = await setup();
     const id = await createAgent(app);
     const a = await assess(app, id);
     const b = (await request(app).get(`/api/records/${a.body.record.recordId}/badge`)).body;
     expect(b.checks.noOpenMustFix.ok).toBe(false);
   });
   it('revoke without X-Admin-Key → 403; with key → Revoked; later re-test → 409 RECORD_REVOKED', async () => {
-    const { app } = setup();
+    const { app } = await setup();
     const { agentId, recordId } = await testedAgent(app);
     expect((await request(app).post(`/api/records/${recordId}/revoke`).send({ reason: 'x' })).status).toBe(403);
     expect((await request(app).post(`/api/records/${recordId}/revoke`).set('X-Admin-Key', 'wrong-key-value').send({ reason: 'x' })).status).toBe(403);
@@ -65,13 +65,13 @@ describe('records API', () => {
     expect((await request(app).get(`/api/records/${recordId}`)).status).toBe(200);
   });
   it('revoke is refused when no admin key is configured', async () => {
-    const { app, deps } = setup();
+    const { app, deps } = await setup();
     deps.adminKey = undefined;
     const { recordId } = await testedAgent(app);
     expect((await request(app).post(`/api/records/${recordId}/revoke`).set('X-Admin-Key', ADMIN_KEY).send({ reason: 'x' })).status).toBe(403);
   });
   it('a run started before revoke cannot complete (409 RECORD_REVOKED)', async () => {
-    const { app } = setup();
+    const { app } = await setup();
     const { agentId, recordId } = await testedAgent(app);
     const run = (await startRun(app, agentId)).body;
     await request(app).post(`/api/records/${recordId}/revoke`).set('X-Admin-Key', ADMIN_KEY).send({ reason: 'x' });
@@ -80,7 +80,7 @@ describe('records API', () => {
     expect(res.body.error.code).toBe('RECORD_REVOKED');
   });
   it('PATCH public showTestSummary false hides testSummary in verify JSON', async () => {
-    const { app } = setup();
+    const { app } = await setup();
     const { recordId } = await testedAgent(app);
     expect((await request(app).get(`/verify/${recordId}.json`)).body.testSummary).not.toBeNull();
     const patched = await request(app).patch(`/api/records/${recordId}/public`).send({ showTestSummary: false });
