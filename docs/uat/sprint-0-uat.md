@@ -59,20 +59,24 @@ Notes: the run is re-runnable (it creates fresh agents each time). An early FAIL
 
 The script prints the URLs at the end of the run.
 
-- [ ] Agent B (Current with failures): green Current pill, amber "Evidence: self-reported" chip, "Last test: 25 of 30 run cases passed (self-run) · 5 must-fix items open", facts with dates, SHA-256 wraps on narrow screens, disclaimer visible, "What does this record mean?" expands, Lexend font, tab title "BookBot B · ComplyNexus Lite record".
-- [ ] Agent A (Revoked): red Revoked pill, revoke copy, no summary box, "Revoked on" fact.
-- [ ] Agent D (escaped name): indigo Assessed pill, name shown literally as text with no alert dialog, "Safe test · about 6 min".
-- [ ] `/verify/CNL-0000-0000` shows "Record not found".
-- [ ] At about 375px width the page is readable and the facts stack.
-- [ ] Optional: hide the summary via PATCH and reload.
+- [x] Agent B (Current with failures): green Current pill, amber "Evidence: self-reported" chip, "Last test: 25 of 30 run cases passed (self-run) · 5 must-fix items open", facts with dates, SHA-256 wraps on narrow screens, disclaimer visible, "What does this record mean?" expands, Lexend font, tab title "BookBot B · ComplyNexus Lite record".
+- [x] Agent A (Revoked): red Revoked pill, revoke copy, no summary box, "Revoked on" fact.
+- [x] Agent D (escaped name): indigo Assessed pill, name shown literally as text with no alert dialog, "Safe test · about 6 min".
+- [x] `/verify/CNL-0000-0000` shows "Record not found".
+- [x] At about 375px width the page is readable and the facts stack.
+- [ ] Optional: hide the summary via PATCH and reload (the script already checks this in UAT-19).
 
 ## Results
 
 | Run date | Server (commit / BASE_URL) | Runner | PASS | FAIL | SKIP | Report file | Manual checks | Sign-off |
 |---|---|---|---|---|---|---|---|---|
 | 2026-10-19 | ab64dfd / http://localhost:3456 | Claude Code (automated) | 29 | 0 | 2 | uat-results/uat-2026-10-19T14-16-00-148Z.json | Not done | Pending |
+| 2026-10-19 | ab64dfd / http://localhost:3456 | Claude Code (re-run, fresh server) | 29 | 0 | 2 | uat-results/uat-2026-10-19T14-17-10-026Z.json | Done in the browser (desktop and 375px) | Pending (product owner) |
 
 ### Observations / defects
 
 - No application defects found. SKIP cases are UAT-30 and UAT-31 by design.
 - Script note: the plan expected the LA-2 open item after the full run to have source `["assessment"]`; the app correctly returns `["assessment", "test"]` because PI-05 (control LA-2) fails in that run. The script expectation was corrected.
+- Manual browser checks passed on desktop and at 375px wide: no horizontal scroll, the facts stack, the hash wraps, the expander opens, and the escaped name shows as text in both the heading and the tab title, with no alert.
+- Cosmetic (not a defect against Sprint 0 scope): the "Record not found" page uses browser default styling, without the record page's look.
+- Cosmetic: at 375px the SHA-256 line wraps mid-word in the trailing text ("compare wit / h the hash"), because the whole line breaks anywhere, not just the hash.
