@@ -1,14 +1,13 @@
 import type { Router } from 'express';
 import type { AppDeps } from '../deps';
-import { asyncRouter } from '../helpers';
 import { HttpError } from '../errors';
-import { loadRecord } from '../helpers';
+import { asyncRouter, loadRecord, previousHashes } from '../helpers';
 import { badgeEligibility } from '../../domain/badge';
 import type { ReadinessRecord } from '../../domain/types';
 import { DISCLAIMER, renderVerifyHtml } from '../views/verify';
 import type { PublicRecordView } from '../views/verify';
 
-export function toPublicView(r: ReadinessRecord): PublicRecordView {
+export function toPublicView(r: ReadinessRecord, previous: string[] = []): PublicRecordView {
   return {
     recordId: r.recordId,
     version: r.version,
@@ -27,6 +26,7 @@ export function toPublicView(r: ReadinessRecord): PublicRecordView {
     evidenceLevel: r.evidenceLevel,
     guidedSize: r.guidedSize,
     hash: r.hash,
+    previousHashes: previous,
     showTestSummary: r.showTestSummary,
     testSummary: r.showTestSummary ? r.testSummary : null,
     openMustFixCount: r.openMustFix.length,
@@ -37,9 +37,11 @@ export function toPublicView(r: ReadinessRecord): PublicRecordView {
 
 export function verifyRoutes(deps: AppDeps): Router {
   const router = asyncRouter();
+  const publicHost = deps.publicBaseUrl ? new URL(deps.publicBaseUrl).host : undefined;
 
   router.get('/:recordId.json', async (req, res) => {
-    const r = toPublicView(await loadRecord(deps, req.params.recordId));
+    const rec = await loadRecord(deps, req.params.recordId, null);
+    const r = toPublicView(rec, await previousHashes(deps, rec));
     res.json({
       recordId: r.recordId,
       version: r.version,
@@ -54,6 +56,7 @@ export function verifyRoutes(deps: AppDeps): Router {
       evidenceLevel: r.evidenceLevel,
       guidedSize: r.guidedSize,
       hash: r.hash,
+      previousHashes: r.previousHashes,
       testSummary: r.testSummary,
       openMustFixCount: r.openMustFixCount,
       badge: r.badge,
@@ -63,8 +66,9 @@ export function verifyRoutes(deps: AppDeps): Router {
 
   router.get('/:recordId', async (req, res) => {
     try {
-      const view = toPublicView(await loadRecord(deps, req.params.recordId));
-      res.type('html').send(renderVerifyHtml(view));
+      const rec = await loadRecord(deps, req.params.recordId, null);
+      const view = toPublicView(rec, await previousHashes(deps, rec));
+      res.type('html').send(renderVerifyHtml(view, publicHost));
     } catch (e) {
       if (e instanceof HttpError && e.status === 404) {
         res.status(404).type('html').send('<!doctype html><html><head><meta charset="utf-8"><title>Record not found</title></head><body><h1>Record not found</h1><p>No ComplyNexus Lite record matches this link.</p></body></html>');

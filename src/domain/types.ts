@@ -31,6 +31,7 @@ export interface Control {
 }
 export interface Agent {
   id: string;
+  founderId: string;
   orgName: string;
   name: string;
   purpose: string;
@@ -142,6 +143,42 @@ export interface ReadinessRecord extends RecordSnapshot {
   revokedAt: string | null;
   revokeReason: string | null;
   showTestSummary: boolean;
+  /** Email dedup markers (ISO timestamps). Outside the hash snapshot and never in public JSON (ADR-0008). */
+  notifications?: { retestDue?: string; expired?: string; reminder?: string };
   createdAt: string;
   updatedAt: string;
+}
+
+/** Append-only history: one row per record version (ADR-0010). id = `${recordId}@${version}`. */
+export interface RecordVersion {
+  id: string;
+  recordId: string;
+  version: number;
+  hash: string;
+  snapshot: RecordSnapshot;
+  createdAt: string;
+}
+
+export interface Founder {
+  id: string;
+  email: string;
+  createdAt: string;
+}
+
+/** id = sha256 hex of the plaintext token. expiresAt/usedAt are Dates so Mongo's TTL index applies (ADR-0007). */
+export interface LoginToken {
+  id: string;
+  founderId: string;
+  email: string;
+  createdAt: string;
+  expiresAt: Date;
+  usedAt: Date | null;
+}
+
+/** id = sha256 hex of the plaintext session token. */
+export interface Session {
+  id: string;
+  founderId: string;
+  createdAt: string;
+  expiresAt: Date;
 }

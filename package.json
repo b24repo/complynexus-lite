@@ -4,7 +4,9 @@
   "private": true,
   "description": "ComplyNexus Lite POC sprint 0: record domain, guided self-test, verify page",
   "license": "UNLICENSED",
-  "engines": { "node": ">=22.12" },
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "lint": "eslint src test",
@@ -12,21 +14,30 @@
     "test": "vitest run --coverage",
     "test:watch": "vitest",
     "dev": "tsx src/server.ts",
-    "start": "node dist/server.js"
+    "uat": "node scripts/uat.mjs",
+    "start": "node dist/server.js",
+    "job:transitions": "node dist/jobs/cli.js",
+    "job:transitions:dev": "tsx src/jobs/cli.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.39.0",
     "dotenv": "16.4.5",
     "express": "4.22.3",
+    "helmet": "8.3.0",
+    "mongodb": "7.7.0",
+    "pdfkit": "0.20.2",
+    "pino": "10.4.0",
     "zod": "3.23.8"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
     "@types/express": "4.17.21",
     "@types/node": "22.20.5",
+    "@types/pdfkit": "0.17.6",
     "@types/supertest": "6.0.2",
     "@vitest/coverage-v8": "5.0.5",
     "eslint": "9.39.5",
+    "mongodb-memory-server": "11.3.0",
     "supertest": "7.0.0",
     "tsx": "4.23.15",
     "typescript": "5.6.3",

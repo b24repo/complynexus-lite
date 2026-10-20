@@ -1,0 +1,23 @@
+name: transitions
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        type: boolean
+        default: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      STAGING_BASE_URL: ${{ secrets.STAGING_BASE_URL }}
+      ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+    steps:
+      - if: ${{ env.STAGING_BASE_URL == '' || env.ADMIN_KEY == '' }}
+        run: echo "STAGING_BASE_URL or ADMIN_KEY not set; skipped"
+      - if: ${{ env.STAGING_BASE_URL != '' && env.ADMIN_KEY != '' }}
+        run: |
+          curl -fsS -X POST "$STAGING_BASE_URL/jobs/transitions" \
+            -H "X-Admin-Key: $ADMIN_KEY" -H 'content-type: application/json' \
+            -d "{\"dryRun\": ${{ inputs.dryRun == true }} }"

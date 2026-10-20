@@ -1,31 +1,39 @@
 import { Router } from 'express';
-import type { RequestHandler } from 'express';
+import type { Request, RequestHandler } from 'express';
 import type { AppDeps } from './deps';
 import { HttpError } from './errors';
 import { applyTimeTransitions } from '../domain/record';
 import { mergeOpenItems, testOpenItems } from '../domain/scoring';
 import { assessmentOpenItems } from '../domain/assessment';
+import { toSnapshot } from '../domain/hash';
 import type { Agent, Assessment, GuidedRun, OpenItem, ReadinessRecord } from '../domain/types';
 import { loadLibrary } from '../library/library';
 
-export async function requireAgent(deps: AppDeps, id: string): Promise<Agent> {
+/** `owner` null means public/admin access (no ownership check). Another founder's agent is a 404, never a 403. */
+export async function requireAgent(deps: AppDeps, id: string, owner: string | null): Promise<Agent> {
   const agent = await deps.repos.agents.getById(id);
-  if (!agent) throw new HttpError(404, 'AGENT_NOT_FOUND');
+  if (!agent || (owner !== null && agent.founderId !== owner)) throw new HttpError(404, 'AGENT_NOT_FOUND');
   return agent;
 }
 
+export async function ownsAgent(deps: AppDeps, agentId: string, owner: string | null): Promise<boolean> {
+  if (owner === null) return true;
+  const agent = await deps.repos.agents.getById(agentId);
+  return !!agent && agent.founderId === owner;
+}
+
 export async function latestAssessment(deps: AppDeps, agentId: string): Promise<Assessment | null> {
-  const all = await deps.repos.assessments.find((a) => a.agentId === agentId);
+  const all = await deps.repos.assessments.find((a) => a.agentId === agentId, { agentId });
   return all.sort((a, b) => b.version - a.version)[0] ?? null;
 }
 
 export async function latestCompletedRun(deps: AppDeps, agentId: string): Promise<GuidedRun | null> {
-  const all = await deps.repos.runs.find((r) => r.agentId === agentId && r.status === 'completed');
+  const all = await deps.repos.runs.find((r) => r.agentId === agentId && r.status === 'completed', { agentId, status: 'completed' });
   return all.sort((a, b) => b.runNumber - a.runNumber)[0] ?? null;
 }
 
 export async function recordForAgent(deps: AppDeps, agentId: string): Promise<ReadinessRecord | null> {
-  return (await deps.repos.records.find((r) => r.agentId === agentId))[0] ?? null;
+  return (await deps.repos.records.find((r) => r.agentId === agentId, { agentId }))[0] ?? null;
 }
 
 /** Union of assessment gaps and failed-test controls from the latest completed run. */
@@ -35,13 +43,65 @@ export async function currentOpenItems(deps: AppDeps, assessment: Assessment, ru
   return mergeOpenItems(fromAssessment, fromTests);
 }
 
+/**
+ * Persists a record AND appends its version row (ADR-0010). Call only where a new hashed version is produced:
+ * createAssessedRecord (insert), applyReassessment and applyTestCompleted (update). Idempotent on the history row.
+ */
+export async function saveNewVersion(deps: AppDeps, record: ReadinessRecord, mode: 'insert' | 'update'): Promise<ReadinessRecord> {
+  const saved = mode === 'insert' ? await deps.repos.records.insert(record) : await deps.repos.records.update(record);
+  try {
+    await deps.repos.recordVersions.insert({
+      id: `${saved.recordId}@${saved.version}`,
+      recordId: saved.recordId,
+      version: saved.version,
+      hash: saved.hash,
+      snapshot: toSnapshot(saved),
+      createdAt: saved.updatedAt,
+    });
+  } catch (err) {
+    if (!(err instanceof Error && err.message.startsWith('Duplicate id'))) throw err;
+  }
+  return saved;
+}
+
+/** Hashes of earlier versions, newest first. */
+export async function previousHashes(deps: AppDeps, record: ReadinessRecord): Promise<string[]> {
+  const all = await deps.repos.recordVersions.find((v) => v.version < record.version, { recordId: record.recordId });
+  return all.sort((a, b) => b.version - a.version).map((v) => v.hash);
+}
+
 /** Loads a record and applies lazy time transitions, persisting when they changed it. */
-export async function loadRecord(deps: AppDeps, recordId: string): Promise<ReadinessRecord> {
+export async function loadRecord(deps: AppDeps, recordId: string, owner: string | null): Promise<ReadinessRecord> {
   const stored = await deps.repos.records.getById(recordId);
-  if (!stored) throw new HttpError(404, 'RECORD_NOT_FOUND');
+  if (!stored || !(await ownsAgent(deps, stored.agentId, owner))) throw new HttpError(404, 'RECORD_NOT_FOUND');
   const next = applyTimeTransitions(stored, deps.clock.now());
   if (next.status !== stored.status) await deps.repos.records.update(next);
   return next;
+}
+
+/**
+ * Origin for links in emails, badges and pages. Never trusts the Host header in production;
+ * elsewhere only for local dev hosts. Returns null when no safe origin exists.
+ */
+export function resolveBaseUrl(deps: AppDeps, req: Request): string | null {
+  if (deps.publicBaseUrl) return deps.publicBaseUrl;
+  const host = req.get('host') ?? '';
+  if (!deps.production && /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)) return `${req.protocol}://${host}`;
+  return null;
+}
+
+/** Like resolveBaseUrl but throws 500 PUBLIC_BASE_URL_REQUIRED when none is safe. */
+export function baseUrl(deps: AppDeps, req: Request): string {
+  const base = resolveBaseUrl(deps, req);
+  if (base) return base;
+  deps.logger.error({ host: req.get('host') }, 'PUBLIC_BASE_URL is required to build links');
+  throw new HttpError(500, 'PUBLIC_BASE_URL_REQUIRED');
+}
+
+export async function requireRun(deps: AppDeps, runId: string, owner: string | null): Promise<GuidedRun> {
+  const run = await deps.repos.runs.getById(runId);
+  if (!run || !(await ownsAgent(deps, run.agentId, owner))) throw new HttpError(404, 'RUN_NOT_FOUND');
+  return run;
 }
 
 /** Express 4 does not catch rejected promises, so wrap every async handler. */
