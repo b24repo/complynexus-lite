@@ -15,17 +15,17 @@ export async function requireAgent(deps: AppDeps, id: string): Promise<Agent> {
 }
 
 export async function latestAssessment(deps: AppDeps, agentId: string): Promise<Assessment | null> {
-  const all = await deps.repos.assessments.find((a) => a.agentId === agentId);
+  const all = await deps.repos.assessments.find((a) => a.agentId === agentId, { agentId });
   return all.sort((a, b) => b.version - a.version)[0] ?? null;
 }
 
 export async function latestCompletedRun(deps: AppDeps, agentId: string): Promise<GuidedRun | null> {
-  const all = await deps.repos.runs.find((r) => r.agentId === agentId && r.status === 'completed');
+  const all = await deps.repos.runs.find((r) => r.agentId === agentId && r.status === 'completed', { agentId, status: 'completed' });
   return all.sort((a, b) => b.runNumber - a.runNumber)[0] ?? null;
 }
 
 export async function recordForAgent(deps: AppDeps, agentId: string): Promise<ReadinessRecord | null> {
-  return (await deps.repos.records.find((r) => r.agentId === agentId))[0] ?? null;
+  return (await deps.repos.records.find((r) => r.agentId === agentId, { agentId }))[0] ?? null;
 }
 
 /** Union of assessment gaps and failed-test controls from the latest completed run. */

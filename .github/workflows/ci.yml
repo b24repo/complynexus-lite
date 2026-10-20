@@ -11,7 +11,14 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongodb-binaries-${{ runner.os }}-8.2.6
       - run: npm ci
       - run: npm run lint
       - run: npm test
+        env:
+          MONGOMS_VERSION: '8.2.6'
+          MONGOMS_DOWNLOAD_DIR: ~/.cache/mongodb-binaries
       - run: npm run build

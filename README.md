@@ -4,8 +4,7 @@ Low-regret core of ComplyNexus Lite: the readiness record domain (state machine,
 canonical hash, 15-control assessment), the 46-case test library, the guided self-test engine
 with a rule-based grader, a thin JSON API and a server-rendered public verify page.
 
-Out of scope: endpoint test runner, auth, notifications and schedulers, fix-it plans, Mongo
-implementation, React UI. See `docs/adr/` for decisions.
+Out of scope: endpoint test runner, auth, notifications and schedulers, fix-it plans, React UI. See `docs/adr/` for decisions.
 
 ## Commands
 
@@ -16,6 +15,8 @@ npm run lint
 npm test           # vitest with coverage thresholds (lines 80, functions 80, branches 75)
 npm run build
 npm run dev        # PORT=3000, copy .env.example to .env first
+SKIP_MONGO_TESTS=1 npm test  # skip the MongoDB tests (they download MongoDB 8.2.6 once)
+MONGODB_URI=mongodb://localhost:27017 npm run dev  # use MongoDB instead of memory
 ```
 
 ## API
@@ -61,7 +62,8 @@ curl -s -X POST $B/api/agents/$A/guided-runs -H 'content-type: application/json'
 
 ## Porting
 
-Implement `MongoRepository` (collections `agents`, `assessments`, `guided_runs`,
-`readiness_records`, unique index on `recordId`), replace the in-memory sequence with a Mongo
-counter, and add a scheduler that runs `applyTimeTransitions` over all records (ticket L-31).
-For AWS, the Express app is a plain `createApp(deps)` and fits Lambda or a container.
+`MongoRepository` is implemented (`src/infra/repo/mongo.ts`, ADR-0005). Set `MONGODB_URI` (and
+optionally `MONGODB_DB`) to use it, otherwise the server runs in memory; indexes are created at
+boot. Remaining porting work: a scheduler that runs `applyTimeTransitions` over all records
+(ticket L-31). For AWS, the Express app is a plain `createApp(deps)` and fits Lambda or a
+container (reuse one `MongoClient` across invocations).
