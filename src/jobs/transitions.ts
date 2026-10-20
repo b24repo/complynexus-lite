@@ -91,6 +91,7 @@ export async function runTransitions(deps: AppDeps, opts: TransitionsOptions): P
       }
     }
   }
-  log.info({ ...s, planned: undefined }, 'transitions job finished');
+  const { planned: _planned, dryRun: _dryRun, ...counts } = s; // dryRun already bound on the child logger
+  log.info(counts, 'transitions job finished');
   return s;
 }

@@ -7,7 +7,7 @@ import { esc, layout } from './layout';
 export function renderResults(ctx: Ctx, agent: Agent, r: ResultsView, verifyPath?: string): string {
   const s = r.summary;
   const rows = s.byCategory
-    .map((c) => `<tr><td>${esc(c.category)}</td><td>${c.passed}/${c.run}</td><td>${esc(c.verdict)}</td></tr>`)
+    .map((c) => `<tr><td>${esc(c.category)}</td><td class="num">${c.passed}/${c.run}</td><td>${esc(c.verdict)}</td></tr>`)
     .join('');
   const failed = r.failedCases.length
     ? `<ul>${r.failedCases
@@ -24,7 +24,7 @@ export function renderResults(ctx: Ctx, agent: Agent, r: ResultsView, verifyPath
     { ...ctx, title: `Results · ${agent.name}` },
     `<h1>Results · ${esc(agent.name)}</h1>
 <div class="card"><p class="box">${s.passed} of ${s.run} run cases passed · ${s.notRun} not run</p><p><span class="pill" style="background:#F1F2F7;color:#334155;border-color:#334155">Evidence: self-reported</span></p>
-<table><thead><tr><th>Category</th><th>Passed</th><th>Verdict</th></tr></thead><tbody>${rows}</tbody></table></div>
+<table><thead><tr><th>Category</th><th class="num">Passed</th><th>Verdict</th></tr></thead><tbody>${rows}</tbody></table></div>
 <div class="card"><h2>Failed cases</h2>${failed}</div>
 <div class="card"><h2>Not run</h2>${notRun}</div>
 <div class="card"><h2>Open items</h2>${items}</div>
