@@ -28,7 +28,7 @@ describe('magic link sign-in', () => {
 
     const cb = await anon.get(pathOf(link));
     expect(cb.status).toBe(303);
-    expect(cb.headers.location).toBe('/auth/me');
+    expect(cb.headers.location).toBe('/app');
     const me = await anon.get('/auth/me');
     expect(me.status).toBe(200);
     expect(me.body.founder).toMatchObject({ email });

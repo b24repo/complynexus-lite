@@ -13,6 +13,7 @@ import { guidedRoutes } from './routes/guided';
 import { healthRoutes } from './routes/health';
 import { recordRoutes } from './routes/records';
 import { verifyRoutes } from './routes/verify';
+import { appRoutes } from '../web/routes';
 import { LIBRARY_VERSION, loadLibrary } from '../library/library';
 
 export function createApp(deps: AppDeps): Application {
@@ -26,7 +27,9 @@ export function createApp(deps: AppDeps): Application {
   app.get('/api/library', (_req, res) => {
     res.json({ version: LIBRARY_VERSION, cases: loadLibrary() });
   });
+  app.use(['/app', '/auth'], express.urlencoded({ extended: false, limit: '100kb' }));
   app.use('/auth', authRoutes(deps));
+  app.use('/app', appRoutes(deps));
   const auth = requireFounder(deps);
   app.use('/api/agents', auth, agentRoutes(deps));
   app.use('/api/guided-runs', auth);

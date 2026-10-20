@@ -1,3 +1,4 @@
+import { PILLS, esc } from '../../web/views/layout';
 import { formatDate } from '../../domain/dates';
 import type { EvidenceLevel, GuidedSize, RecordStatus, RunMode, TestSummary } from '../../domain/types';
 
@@ -29,23 +30,7 @@ export interface PublicRecordView {
   disclaimer: string;
 }
 
-export function esc(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
-interface PillStyle {
-  bg: string;
-  fg: string;
-  label: string;
-}
-
-const PILLS: Record<RecordStatus, PillStyle> = {
-  Assessed: { bg: '#F0F0FF', fg: '#3D3FD6', label: 'Assessed · not yet tested' },
-  Current: { bg: '#DCFCE7', fg: '#166534', label: 'Current' },
-  'Re-test due': { bg: '#FEF3C7', fg: '#92400E', label: 'Re-test due' },
-  Expired: { bg: '#F1F2F7', fg: '#334155', label: 'Expired' },
-  Revoked: { bg: '#FEE2E2', fg: '#991B1B', label: 'Revoked' },
-};
+export { esc };
 
 const D = (iso: string | null): string => (iso ? formatDate(iso) : '');
 
