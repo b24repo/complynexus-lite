@@ -21,6 +21,7 @@ SKIP_MONGO_TESTS=1 npm test  # skip the MongoDB tests (they download MongoDB 8.2
 MONGODB_URI=mongodb://localhost:27017 npm run dev  # use MongoDB instead of memory
 docker build --build-arg GIT_COMMIT=$(git rev-parse --short HEAD) -t complynexus-lite:local .  # see docs/deploy/staging.md
 npm run uat        # black-box UAT against a running server (BASE_URL, ADMIN_KEY); CI runs it against an in-memory server
+npm run eval:grader  # manual, needs ANTHROPIC_API_KEY + ANTHROPIC_MODEL
 ```
 
 ## API

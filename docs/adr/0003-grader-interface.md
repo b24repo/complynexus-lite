@@ -16,5 +16,5 @@ personal data, and CI must not call the network.
 - "Can't check" on an action case is recorded as not run, never as a fail.
 
 ## Consequences
-- The Claude adapter is excluded from coverage and never exercised in CI.
-- Model id comes from `ANTHROPIC_MODEL`.
+- The Claude adapter is unit tested against a stubbed client (ADR-0011) and never exercised against the network in CI.
+- Model id comes from `ANTHROPIC_MODEL`, which is required when `ANTHROPIC_API_KEY` is set (ADR-0011).

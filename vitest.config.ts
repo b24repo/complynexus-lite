@@ -8,6 +8,8 @@ export default defineConfig({
       include: [
         'src/domain/**',
         'src/guided/**',
+        'src/grading/anthropicClient.ts',
+        'src/grading/claude.ts',
         'src/grading/redact.ts',
         'src/grading/ruleBased.ts',
         'src/library/**',
@@ -19,7 +21,7 @@ export default defineConfig({
         'src/api/middleware/**',
         'src/infra/tokens.ts',
       ],
-      exclude: ['src/grading/claude.ts', 'src/infra/repo/mongo.ts', 'src/server.ts'],
+      exclude: ['src/infra/repo/mongo.ts', 'src/server.ts'],
       reporter: ['text', 'text-summary'],
       thresholds: { lines: 80, functions: 80, branches: 75 },
     },
