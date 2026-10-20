@@ -6,6 +6,7 @@ import { getCase } from '../../src/library/library';
 import { RuleBasedGrader } from '../../src/grading/ruleBased';
 import { FixedClock } from '../../src/infra/clock';
 import { InMemoryRecordIdSource } from '../../src/infra/ids';
+import { NoopNotifier } from '../../src/infra/notify/notifier';
 import { InMemoryRepository } from '../../src/infra/repo/inMemory';
 import { agentBody, allInPlaceAnswers, bookbotAnswers } from '../fixtures/bookbot';
 import { entriesFor } from '../fixtures/replies';
@@ -15,6 +16,7 @@ export const ADMIN_KEY = 'test-admin-key';
 
 export function setup(start = '2026-12-01T00:00:00Z') {
   const clock = new FixedClock(start);
+  const notifier = new NoopNotifier();
   const deps: AppDeps = {
     repos: {
       agents: new InMemoryRepository(),
@@ -25,10 +27,11 @@ export function setup(start = '2026-12-01T00:00:00Z') {
     recordIds: new InMemoryRecordIdSource(),
     clock,
     grader: new RuleBasedGrader(),
+    notifier,
     adminKey: ADMIN_KEY,
   };
   const app: Application = createApp(deps);
-  return { app, clock, deps };
+  return { app, clock, deps, notifier };
 }
 
 export async function createAgent(app: Application, overrides: Record<string, unknown> = {}): Promise<string> {
