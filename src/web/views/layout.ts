@@ -65,8 +65,8 @@ export function errorList(issues: string[]): string {
 }
 
 const CSS = `body{margin:0;background:#F7F7FC;font-family:'Lexend',system-ui,sans-serif;color:#1F2040}a{color:#4446E0}
-header{background:#fff;border-bottom:1px solid #E4E5F5;padding:14px 20px;display:flex;align-items:center;gap:10px}
-header form{margin-left:auto}main{max-width:640px;margin:24px auto;padding:0 16px}
+header{background:#fff;border-bottom:1px solid #E4E5F5;padding:14px 20px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px}
+header form{margin-left:auto;display:flex;align-items:center;gap:8px;min-width:0;max-width:100%}.email{display:inline-block;min-width:0;max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}main{max-width:640px;margin:24px auto;padding:0 16px}
 .card{background:#fff;border:1px solid #E4E5F5;border-radius:12px;padding:24px;margin-bottom:16px}
 .pill{display:inline-block;padding:4px 12px;font-size:14px;font-weight:600;border-radius:999px;border:2px solid}
 .box{margin-top:16px;padding:12px 14px;background:#F7F7FC;border:1px solid #E4E5F5;border-radius:8px;font-size:14px}
@@ -81,7 +81,7 @@ ul.agents{list-style:none;padding:0}.actions{display:flex;gap:8px;flex-wrap:wrap
 
 export function layout(opts: LayoutOpts, body: string): string {
   const signOut = opts.founderEmail
-    ? `<form method="post" action="/auth/logout"><span class="muted">${esc(opts.founderEmail)}</span> ${button('Sign out', { kind: 'ghost' })}</form>`
+    ? `<form method="post" action="/auth/logout"><span class="muted email">${esc(opts.founderEmail)}</span> ${button('Sign out', { kind: 'ghost' })}</form>`
     : '';
   return `<!doctype html>
 <html lang="en">
