@@ -133,7 +133,7 @@ describe('agent form', () => {
 
 describe('agent overview', () => {
   it('walks through the statuses', async () => {
-    const { app, clock } = await setup();
+    const { app } = await setup();
     const id = await createAgentViaForm(app);
     let html = (await app.get(`/app/agents/${id}`).expect(200)).text;
     expect(html).toContain('Start assessment');
@@ -170,7 +170,6 @@ describe('agent overview', () => {
       description: 'new prompt',
     }).expect(303);
     expect((await app.get(`/api/agents/${id}`)).body.changedAt).toBeTruthy();
-    clock.set?.(new Date());
   });
 
   it('shows Re-test due after a change on a tested agent and continues an active run', async () => {
