@@ -1,6 +1,7 @@
 import pino from 'pino';
 import request from 'supertest';
-import type { Application } from 'express';
+import http from 'node:http';
+import { onTestFinished } from 'vitest';
 import { createApp } from '../../src/api/app';
 import { DEFAULT_AUTH } from '../../src/api/deps';
 import type { AppDeps } from '../../src/api/deps';
@@ -22,7 +23,7 @@ export const FOUNDER_B = 'founder-b@example.com';
 export type Client = ReturnType<typeof request.agent>;
 
 /** Signs in through the real magic-link flow and returns a cookie-keeping client plus the session token. */
-export async function signIn(server: Application, notifier: NoopNotifier, email = FOUNDER_A) {
+export async function signIn(server: http.Server, notifier: NoopNotifier, email = FOUNDER_A) {
   const client = request.agent(server);
   await client.post('/auth/magic-link').send({ email }).expect(202);
   const link = notifier.sent.at(-1)!.text.match(/https?:\/\/\S+/)![0];
@@ -32,6 +33,11 @@ export async function signIn(server: Application, notifier: NoopNotifier, email 
   return { client, token, bearer: { Authorization: `Bearer ${token}` } };
 }
 
+/**
+ * Binds one server to 127.0.0.1 per test. Passing a bare Express app makes supertest listen on the
+ * wildcard address per request, and the kernel can hand it an ephemeral port already owned by another
+ * local process on 127.0.0.1, so requests hang or hit the wrong service.
+ */
 export async function setup(start = '2026-12-01T00:00:00Z', overrides: Partial<AppDeps> = {}) {
   const clock = new FixedClock(start);
   const notifier = new NoopNotifier();
@@ -57,7 +63,15 @@ export async function setup(start = '2026-12-01T00:00:00Z', overrides: Partial<A
     auth: { ...DEFAULT_AUTH, sessionTtlMs: 10 * 365 * 24 * 3600_000 },
     ...overrides,
   };
-  const server: Application = createApp(deps);
+  const server = http.createServer(createApp(deps));
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  onTestFinished(
+    () =>
+      new Promise<void>((r) => {
+        server.close(() => r());
+        server.closeAllConnections();
+      }),
+  );
   const { client: app, token } = await signIn(server, notifier);
   const anon = request.agent(server);
   return { app, anon, server, token, clock, deps, notifier, signIn: (email: string) => signIn(server, notifier, email) };
