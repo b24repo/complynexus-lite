@@ -1,10 +1,21 @@
 #!/usr/bin/env node
 // Black-box UAT for ComplyNexus Lite Sprint 0. Talks to a running server over HTTP only.
 // Usage: BASE_URL=http://localhost:3000 ADMIN_KEY=change-me npm run uat
+// The server needs ALLOW_DEV_LOGIN=1, the same ADMIN_KEY, PUBLIC_BASE_URL=<BASE_URL> and no ANTHROPIC_API_KEY.
+// Optional runner env: PUBLIC_BASE_URL (defaults to BASE_URL), UAT_EMAIL_DOMAIN (default example.com).
 import { mkdirSync, writeFileSync } from 'node:fs';
 
+mkdirSync('uat-results', { recursive: true });
+
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
+const EXPECTED_BASE = (process.env.PUBLIC_BASE_URL || BASE_URL).replace(/\/+$/, '');
 const ADMIN_KEY = process.env.ADMIN_KEY || 'change-me';
+const EMAIL_DOMAIN = process.env.UAT_EMAIL_DOMAIN || 'example.com';
+const EMAIL_A = `uat-founder-a@${EMAIL_DOMAIN}`;
+const EMAIL_Z = `uat-founder-z@${EMAIL_DOMAIN}`;
+const EMAIL_MAGIC = `uat-magic@${EMAIL_DOMAIN}`;
+const TOKEN = /^[A-Za-z0-9_-]{43}$/;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 class Fail extends Error {}
 class Skip extends Error {}
@@ -13,24 +24,22 @@ const RECORD_ID = /^CNL-\d{4}-\d{4}$/;
 const HEX64 = /^[0-9a-f]{64}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-async function http(method, path, { body, headers = {}, rawBody } = {}) {
+async function http(method, path, { body, rawBody, form, headers = {}, auth = true, token, cookie, binary = false } = {}) {
   const h = { ...headers };
+  const bearer = token ?? (auth && !cookie ? ctx.bearer : undefined);
+  if (bearer) h.authorization = `Bearer ${bearer}`;
+  if (cookie) h.cookie = cookie;
   let payload;
-  if (rawBody !== undefined) {
-    payload = rawBody;
-    h['content-type'] = 'application/json';
-  } else if (body !== undefined) {
-    payload = JSON.stringify(body);
-    h['content-type'] = 'application/json';
-  }
-  const res = await fetch(BASE_URL + path, { method, headers: h, body: payload });
-  const text = await res.text();
+  if (rawBody !== undefined) { payload = rawBody; h['content-type'] = 'application/json'; }
+  else if (form !== undefined) { payload = new URLSearchParams(form).toString(); h['content-type'] = 'application/x-www-form-urlencoded'; }
+  else if (body !== undefined) { payload = JSON.stringify(body); h['content-type'] = 'application/json'; }
+  const res = await fetch(BASE_URL + path, { method, headers: h, body: payload, redirect: 'manual' });
+  const buf = Buffer.from(await res.arrayBuffer());
   const contentType = res.headers.get('content-type') || '';
+  const text = binary ? '' : buf.toString('utf8');
   let json;
-  if (contentType.includes('application/json')) {
-    try { json = JSON.parse(text); } catch { json = undefined; }
-  }
-  return { status: res.status, contentType, text, json };
+  if (contentType.includes('application/json')) { try { json = JSON.parse(text); } catch { json = undefined; } }
+  return { status: res.status, contentType, text, json, buf, headers: res.headers, location: res.headers.get('location'), setCookie: res.headers.getSetCookie() };
 }
 
 // ---- assertion helpers
@@ -105,10 +114,56 @@ const verifyHtml = async (id) => { const r = status(await http('GET', `/verify/$
 const verifyJson = async (id) => status(await http('GET', `/verify/${id}.json`), 200).json;
 const hostile = '<script>alert(1)</script>';
 
+// ---- sign-in and page helpers (Sprint 1)
+async function signInViaDevLink(email) {
+  const r = await http('POST', '/auth/dev-link', { body: { email }, headers: adminHeaders, auth: false });
+  if (r.status === 404) throw new Fail('POST /auth/dev-link is 404: the server needs ALLOW_DEV_LOGIN=1 and ADMIN_KEY');
+  if (r.status === 403) throw new Fail("403 FORBIDDEN: the runner's ADMIN_KEY must equal the server's ADMIN_KEY");
+  if (r.status === 500) throw new Fail(`500 ${r.json?.error?.code}: set PUBLIC_BASE_URL on the server (BASE_URL is not localhost)`);
+  status(r, 201);
+  ok(TOKEN.test(r.json.token), 'login token format');
+  ok(r.json.url.startsWith(`${EXPECTED_BASE}/auth/callback?token=`), `dev-link url ${r.json.url}`);
+  const u = new URL(r.json.url);
+  const callbackPath = u.pathname + u.search;
+  const cb = await http('GET', callbackPath, { auth: false });
+  status(cb, 303);
+  eq(cb.location, '/app', 'callback location');
+  const cookieLine = cb.setCookie.find((c) => c.startsWith('cnl_session=')) || '';
+  const session = /^cnl_session=([A-Za-z0-9_-]{43})/.exec(cookieLine)?.[1];
+  ok(session, `session cookie missing: ${cookieLine}`);
+  for (const f of ['HttpOnly', 'SameSite=Lax', 'Path=/']) contains(cookieLine, f);
+  const me = await http('GET', '/auth/me', { token: session });
+  status(me, 200);
+  eq(me.json.founder.email, email, 'me.email');
+  return { token: session, cookie: `cnl_session=${session}`, founderId: me.json.founder.id, callbackPath };
+}
+
+const csrfOf = (html) => { const m = /name="_csrf" value="([0-9a-f]{64})"/.exec(html); if (!m) throw new Fail('no _csrf field in page'); return m[1]; };
+
+function pdfText(buf) {
+  const raw = buf.toString('latin1');
+  const lines = [];
+  for (const m of raw.matchAll(/\[((?:<[0-9a-fA-F]*>|-?[\d.]+|\s)+)\]\s*TJ/g)) {
+    const hex = [...m[1].matchAll(/<([0-9a-fA-F]*)>/g)].map((h) => h[1]).join('');
+    lines.push(Buffer.from(hex, 'hex').toString('latin1'));
+  }
+  return lines.join('\n');
+}
+
+
 // ---- registry
 const cases = [];
 function uat(id, area, story, fn, requires = []) { cases.push({ id, area, story, fn, requires }); }
 const skipAlways = (id, area, story, reason) => uat(id, area, story, () => { throw new Skip(reason); });
+
+uat('UAT-00', 'Sign-in', 'A founder can sign in with a one-time link and gets a session', async () => {
+  const s1 = await signInViaDevLink(EMAIL_A);
+  ctx.bearer = s1.token;
+  ctx.cookie = s1.cookie;
+  ctx.founderA = s1.founderId;
+  errCode(await http('GET', s1.callbackPath, { auth: false }), 401, 'INVALID_LOGIN_TOKEN');
+  return `founder ${s1.founderId}`;
+});
 
 uat('UAT-01', 'Library', 'As a founder I can see the test library', async () => {
   const r = status(await http('GET', '/api/library'), 200).json;
@@ -136,7 +191,7 @@ uat('UAT-02', 'Agents', 'I can profile my agent and read it back', async () => {
   ctx.agentC = (await createAgent({ name: 'NoRecordBot' })).id;
   ctx.agentD = (await createAgent({ name: hostile })).id;
   return `agentA ${a.id}`;
-});
+}, ['bearer']);
 
 uat('UAT-03', 'Agents/errors', 'Bad input is rejected clearly', async () => {
   const a = errCode(await http('POST', '/api/agents', { body: { name: 'x' } }), 400, 'VALIDATION');
@@ -146,7 +201,7 @@ uat('UAT-03', 'Agents/errors', 'Bad input is rejected clearly', async () => {
   errCode(await http('GET', '/api/agents/nope'), 404, 'AGENT_NOT_FOUND');
   errCode(await http('GET', '/api/nothing'), 404, 'NOT_FOUND');
   return '4 error cases';
-});
+}, ['bearer']);
 
 uat('UAT-04', 'Assessment', 'Answering 15 controls scores my agent and creates an Assessed record', async () => {
   const r = status(await http('POST', `/api/agents/${ctx.agentA}/assessment`, { body: { answers: bookbotAnswers } }), 201).json;
@@ -202,14 +257,15 @@ uat('UAT-07', 'Badge', 'An untested agent cannot show the badge', async () => {
   eq(b.checks.noOpenMustFix, { ok: false, openIds: ['PE-2', 'LA-2', 'LA-3', 'RO-4'] }, 'noOpenMustFix');
   eq(b.checks.statusCurrent, { ok: false, status: 'Assessed' }, 'statusCurrent');
   eq(b.text, 'AI agent tested · Verify', 'text');
-  ok(b.verifyUrl.endsWith(`/verify/${ctx.recordA}`), `verifyUrl ${b.verifyUrl}`);
+  eq(b.verifyUrl, `${EXPECTED_BASE}/verify/${ctx.recordA}`, 'verifyUrl');
   return 'not eligible';
 }, ['recordA']);
 
 uat('UAT-08', 'Verify page (Assessed)', 'The public page says the agent is assessed but not tested', async () => {
   const h = await verifyHtml(ctx.recordA);
-  for (const s of ['Assessed · not yet tested', '#3D3FD6', `Record ${ctx.recordA} · snapshot`, 'Tests: Not tested yet · 4 must-fix items open from the assessment', 'No adversarial tests have been run yet', 'Safe test · about 6 min', 'Not yet', `SHA-256 ${ctx.hashA1} · compare with the hash printed on the PDF`, 'This is a governance-readiness record, not certification. It does not guarantee compliance or safety. Prompts, replies and personal data are not shown here.', 'What does this record mean?', 'family=Lexend', '#595BFF', '<title>BookBot · ComplyNexus Lite record</title>', 'Acme Studio · BookBot']) contains(h, s);
+  for (const s of ['Assessed · not yet tested', '#3D3FD6', `Record ${ctx.recordA} · snapshot`, 'Tests: Not tested yet · 4 must-fix items open from the assessment', 'No adversarial tests have been run yet', 'Safe test · about 6 min', 'Not yet', `SHA-256 ${ctx.hashA1} · compare with the hash printed on the PDF (version 1)`, 'This is a governance-readiness record, not certification. It does not guarantee compliance or safety. Prompts, replies and personal data are not shown here.', 'What does this record mean?', 'family=Lexend', '#595BFF', '<title>BookBot · ComplyNexus Lite record</title>', 'Acme Studio · BookBot']) contains(h, s);
   lacks(h, 'Mei Chan');
+  lacks(h, 'Earlier versions');
   return 'copy ok, owner hidden';
 }, ['recordA']);
 
@@ -219,6 +275,7 @@ uat('UAT-09', 'Re-assessment', 'Re-answering creates a new version with a new ha
   matches(r.record, { recordId: ctx.recordA, version: 2, status: 'Assessed', readinessScore: 100, riskBand: 'Low risk', openMustFix: [], openShouldFix: [] }, 'record');
   ok(r.record.hash !== ctx.hashA1, 'hash changed');
   ctx.hashA2 = r.record.hash;
+  eq((await verifyJson(ctx.recordA)).previousHashes, [ctx.hashA1], 'previousHashes');
   return 'v2 score 100';
 }, ['recordA']);
 
@@ -334,7 +391,7 @@ uat('UAT-16', 'Badge', 'A Current record with no must-fix items is badge-eligibl
   eq(b.eligible, true, 'eligible');
   eq(b.checks.noOpenMustFix, { ok: true, openIds: [] }, 'noOpenMustFix');
   eq(b.checks.statusCurrent, { ok: true, status: 'Current' }, 'statusCurrent');
-  ok(b.verifyUrl.endsWith(`/verify/${ctx.recordA}`), 'verifyUrl');
+  eq(b.verifyUrl, `${EXPECTED_BASE}/verify/${ctx.recordA}`, 'verifyUrl');
   return 'eligible';
 }, ['hashA3']);
 
@@ -343,6 +400,7 @@ uat('UAT-17', 'Verify JSON (privacy)', 'The public JSON shows status and summary
   const j = r.json;
   matches(j, { recordId: ctx.recordA, version: 3, orgName: 'Acme Studio', agentName: 'BookBot', status: 'Current', runMode: 'self_run', evidenceLevel: 'self_reported', guidedSize: 'essentials', hash: ctx.hashA3, openMustFixCount: 0 }, 'json');
   eq(j.badge.eligible, true, 'badge.eligible');
+  eq(j.previousHashes, [ctx.hashA2, ctx.hashA1], 'previousHashes');
   matches(j.testSummary, { run: 10, passed: 10 }, 'testSummary');
   contains(j.disclaimer, 'not certification');
   for (const s of ['Mei Chan', 'ownerName', 'prompt', 'reply', 'agentId', 'revokeReason', 'showTestSummary']) lacks(JSON.stringify(j), s);
@@ -353,7 +411,7 @@ uat('UAT-18', 'Verify page (Current)', 'The public page explains the self-run te
   const rec = await getRecord(ctx.recordA);
   const h = await verifyHtml(ctx.recordA);
   const t = D(rec.lastTestedAt);
-  for (const s of [`Record ${ctx.recordA} · v3`, '#166534', 'Evidence: self-reported', `Tests self-run by the founder on ${t} (10 of 46 cases; 36 not tested on this path). Next scheduled re-test by ${D(rec.nextRetestBy)}.`, 'Last test: 10 of 10 run cases passed (self-run) · no must-fix items open', `${t} · Self-run`, 'Next re-test by', `SHA-256 ${ctx.hashA3}`]) contains(h, s);
+  for (const s of [`Record ${ctx.recordA} · v3`, '#166534', 'Evidence: self-reported', `Tests self-run by the founder on ${t} (10 of 46 cases; 36 not tested on this path). Next scheduled re-test by ${D(rec.nextRetestBy)}.`, 'Last test: 10 of 10 run cases passed (self-run) · no must-fix items open', `${t} · Self-run`, 'Next re-test by', `SHA-256 ${ctx.hashA3} · compare with the hash printed on the PDF (version 3)`, 'Earlier versions: 2', ctx.hashA1, ctx.hashA2]) contains(h, s);
   return 'copy ok';
 }, ['hashA3']);
 
@@ -502,6 +560,7 @@ uat('UAT-26', 'Full run with failures', 'Failed, leaked, skipped and unknown rep
   eq(rec.openMustFix, ['PE-1', 'PE-2', 'LA-2', 'LA-3', 'RO-4'], 'openMustFix');
   eq(rec.openShouldFix, ['MS-1', 'AE-1', 'CA-1'], 'openShouldFix');
   ok(rec.hash !== ctx.hashB1, 'hash changed');
+  ctx.hashB2 = rec.hash;
   const b = status(await http('GET', `/api/records/${ctx.recordB}/badge`), 200).json;
   eq(b.eligible, false, 'badge eligible');
   eq(b.checks.noOpenMustFix, { ok: false, openIds: ['PE-1', 'PE-2', 'LA-2', 'LA-3', 'RO-4'] }, 'noOpenMustFix');
@@ -546,6 +605,7 @@ uat('UAT-27', 'Guided results (full)', 'The results page lists failed cases with
 uat('UAT-28', 'Verify page/safety', 'HTML in an agent name is shown as text, not executed', async () => {
   const r = await assess(ctx.agentD, allInPlaceAnswers);
   ctx.recordD = r.record.recordId;
+  ctx.hashD1 = r.record.hash;
   const h = await verifyHtml(ctx.recordD);
   lacks(h, hostile);
   for (const s of ['&lt;script&gt;alert(1)&lt;/script&gt;', 'Assessed · not yet tested', '0 must-fix items open from the assessment']) contains(h, s);
@@ -565,10 +625,252 @@ uat('UAT-29', 'Not found', 'Unknown ids give friendly 404s', async () => {
   errCode(await http('GET', '/api/guided-runs/nope/results'), 404, 'RUN_NOT_FOUND');
   errCode(await http('POST', '/api/guided-runs/nope/batches/1', { body: { entries: [] } }), 404, 'RUN_NOT_FOUND');
   return '8 not-found cases';
+}, ['bearer']);
+
+const NF = { agent: 'AGENT_NOT_FOUND', run: 'RUN_NOT_FOUND', rec: 'RECORD_NOT_FOUND' };
+
+uat('UAT-32', 'Auth/401', 'Every protected route refuses anonymous callers; public routes stay public', async () => {
+  const A = ctx.agentA, R = ctx.runA1, C = ctx.recordA;
+  const anon = { auth: false };
+  const table = [
+    ['POST', '/api/agents', { body: {} }],
+    ['GET', `/api/agents/${A}`, {}],
+    ['POST', `/api/agents/${A}/assessment`, { body: {} }],
+    ['GET', `/api/agents/${A}/assessment`, {}],
+    ['POST', `/api/agents/${A}/changes`, { body: {} }],
+    ['POST', `/api/agents/${A}/guided-runs`, { body: {} }],
+    ['GET', `/api/guided-runs/${R}`, {}],
+    ['POST', `/api/guided-runs/${R}/batches/1`, { body: { entries: [] } }],
+    ['GET', `/api/guided-runs/${R}/results`, {}],
+    ['GET', `/api/records/${C}`, {}],
+    ['GET', `/api/records/${C}/badge`, {}],
+    ['GET', `/api/records/${C}/pdf`, {}],
+    ['PATCH', `/api/records/${C}/public`, { body: { showTestSummary: true } }],
+    ['GET', '/auth/me', {}],
+  ];
+  for (const [m, path, o] of table) errCode(await http(m, path, { ...o, ...anon }), 401, 'AUTH_REQUIRED');
+  errCode(await http('GET', '/auth/me', { token: 'b'.repeat(43) }), 401, 'AUTH_REQUIRED');
+  errCode(await http('GET', '/auth/me', { token: 'short' }), 401, 'AUTH_REQUIRED');
+  status(await http('GET', '/api/library', anon), 200);
+  status(await http('GET', `/verify/${C}`, anon), 200);
+  status(await http('GET', `/verify/${C}.json`, anon), 200);
+  status(await http('GET', '/healthz', anon), 200);
+  errCode(await http('POST', `/api/records/${C}/revoke`, { body: { reason: 'x' }, ...anon }), 403, 'FORBIDDEN');
+  errCode(await http('POST', '/jobs/transitions', { body: {}, ...anon }), 403, 'FORBIDDEN');
+  return `${table.length + 2} anonymous refusals, public routes open`;
+}, ['agentA', 'runA1', 'recordA', 'bearer']);
+
+uat('UAT-33', 'Ownership', "Another founder cannot see or change my agents, runs or records (always 404)", async () => {
+  const A = ctx.agentA, R = ctx.runA1, C = ctx.recordA;
+  const before = await getRecord(C);
+  const z = await signInViaDevLink(EMAIL_Z);
+  ctx.bearerZ = z.token;
+  ctx.cookieZ = z.cookie;
+  ok(z.founderId !== ctx.founderA, 'founder Z differs from founder A');
+  const as = { token: z.token };
+  errCode(await http('GET', `/api/agents/${A}`, as), 404, NF.agent);
+  errCode(await http('POST', `/api/agents/${A}/assessment`, { ...as, body: {} }), 404, NF.agent);
+  errCode(await http('GET', `/api/agents/${A}/assessment`, as), 404, NF.agent);
+  errCode(await http('POST', `/api/agents/${A}/changes`, { ...as, body: {} }), 404, NF.agent);
+  errCode(await http('POST', `/api/agents/${A}/guided-runs`, { ...as, body: {} }), 404, NF.agent);
+  errCode(await http('GET', `/api/guided-runs/${R}`, as), 404, NF.run);
+  errCode(await http('POST', `/api/guided-runs/${R}/batches/1`, { ...as, body: {} }), 404, NF.run);
+  errCode(await http('GET', `/api/guided-runs/${R}/results`, as), 404, NF.run);
+  errCode(await http('GET', `/api/records/${C}`, as), 404, NF.rec);
+  errCode(await http('GET', `/api/records/${C}/badge`, as), 404, NF.rec);
+  errCode(await http('PATCH', `/api/records/${C}/public`, { ...as, body: { showTestSummary: false } }), 404, NF.rec);
+  errCode(await http('PATCH', `/api/records/${C}/public`, { ...as, body: {} }), 404, NF.rec);
+  errCode(await http('GET', `/api/records/${C}/pdf`, as), 404, NF.rec);
+  const dash = status(await http('GET', '/app', { cookie: z.cookie }), 200);
+  contains(dash.text, 'No agents yet.');
+  lacks(dash.text, C);
+  const page = status(await http('GET', `/app/agents/${A}`, { cookie: z.cookie }), 404);
+  contains(page.text, 'That agent does not exist or is not yours.');
+  const after = await getRecord(C);
+  for (const k of ['status', 'version', 'hash', 'showTestSummary']) eq(after[k], before[k], `A record ${k}`);
+  return '13 API 404s + 2 pages; A unchanged';
+}, ['agentA', 'runA1', 'recordA', 'bearer']);
+
+uat('UAT-34', 'Magic link', 'Magic-link request never reveals whether an address exists and is rate limited', async () => {
+  const anon = { auth: false };
+  let first = await http('POST', '/auth/magic-link', { ...anon, body: { email: EMAIL_MAGIC } });
+  if (first.status === 429) {
+    await sleep((Number(first.headers.get('retry-after')) || 60) * 1000 + 1000);
+    first = await http('POST', '/auth/magic-link', { ...anon, body: { email: EMAIL_MAGIC } });
+  }
+  status(first, 202);
+  eq(first.json, { ok: true }, 'body');
+  const known = status(await http('POST', '/auth/magic-link', { ...anon, body: { email: EMAIL_A } }), 202);
+  eq(known.json, { ok: true }, 'known email body');
+  const f1 = status(await http('POST', '/auth/magic-link', { ...anon, form: { email: EMAIL_MAGIC } }), 303);
+  eq(f1.location, '/app/sign-in/sent', 'form location');
+  errCode(await http('POST', '/auth/magic-link', { ...anon, body: { email: 'not-an-email' } }), 400, 'VALIDATION');
+  const f2 = status(await http('POST', '/auth/magic-link', { ...anon, form: { email: 'nope' } }), 303);
+  eq(f2.location, '/app/sign-in?error=email', 'form error location');
+  const limited = errCode(await http('POST', '/auth/magic-link', { ...anon, body: { email: EMAIL_MAGIC } }), 429, 'RATE_LIMITED');
+  ok(Number(limited.headers.get('retry-after')) > 0, 'Retry-After > 0');
+  const sent = status(await http('GET', '/app/sign-in/sent', anon), 200);
+  contains(sent.text, 'Check your email');
+  return '202 x3, 400, form redirects, 6th request 429';
 });
 
+uat('UAT-35', 'Logout', 'Signing out ends only that session', async () => {
+  const s2 = await signInViaDevLink(EMAIL_A);
+  status(await http('GET', '/auth/me', { token: s2.token }), 200);
+  const out = status(await http('POST', '/auth/logout', { token: s2.token }), 204);
+  const cleared = out.setCookie.find((c) => c.startsWith('cnl_session=')) || '';
+  ok(/^cnl_session=;/.test(cleared) && /Expires=Thu, 01 Jan 1970/.test(cleared), `cookie not cleared: ${cleared}`);
+  errCode(await http('GET', '/auth/me', { token: s2.token }), 401, 'AUTH_REQUIRED');
+  const pg = status(await http('GET', '/app', { cookie: s2.cookie }), 302);
+  eq(pg.location, '/app/sign-in', 'app after logout');
+  status(await http('GET', '/auth/me'), 200);
+  status(await http('POST', '/auth/logout', { auth: false }), 204);
+  const s3 = await signInViaDevLink(EMAIL_A);
+  const f = status(await http('POST', '/auth/logout', { cookie: s3.cookie, form: {} }), 303);
+  eq(f.location, '/app/sign-in', 'form logout location');
+  errCode(await http('GET', '/auth/me', { token: s3.token }), 401, 'AUTH_REQUIRED');
+  return 'S2 and S3 ended, original session still valid';
+}, ['bearer']);
+
+skipAlways('UAT-36', 'Dev-link disabled', 'POST /auth/dev-link is 404 when ALLOW_DEV_LOGIN is unset', 'needs a second server config (ALLOW_DEV_LOGIN unset); covered by test/api/auth.test.ts');
+
+uat('UAT-37', 'Web app (/app) smoke', 'The dashboard, agent page, sign-in page and CSRF guard behave', async () => {
+  const cookie = ctx.cookie;
+  const dash = status(await http('GET', '/app', { cookie }), 200);
+  contains(dash.contentType, 'text/html');
+  for (const t of [EMAIL_A, 'BookBot', 'Sign out']) contains(dash.text, t);
+  const ov = status(await http('GET', `/app/agents/${ctx.agentB}`, { cookie }), 200);
+  for (const t of ['Current', 'name="_csrf"', 'Download PDF', `/api/records/${ctx.recordB}/pdf`, `${EXPECTED_BASE}/verify/${ctx.recordB}`]) contains(ov.text, t);
+  const anon = { auth: false };
+  eq(status(await http('GET', '/app', anon), 302).location, '/app/sign-in', 'GET /app anon');
+  eq(status(await http('GET', `/app/agents/${ctx.agentB}`, anon), 302).location, '/app/sign-in', 'GET agent anon');
+  eq(status(await http('POST', '/app/agents', { ...anon, form: { name: 'x' } }), 303).location, '/app/sign-in', 'POST anon');
+  const si = status(await http('GET', '/app/sign-in', anon), 200);
+  contains(si.text, 'action="/auth/magic-link"');
+  contains(si.headers.get('content-security-policy') || '', "script-src 'self'");
+  const P = `/app/agents/${ctx.agentB}/changes`;
+  const bad1 = status(await http('POST', P, { cookie, form: { description: 'x' } }), 403);
+  contains(bad1.text, 'This form has expired');
+  status(await http('POST', P, { cookie, form: { description: 'x', _csrf: 'a'.repeat(64) } }), 403);
+  matches(await getRecord(ctx.recordB), { status: 'Current', changedAt: null }, 'record B');
+  status(await http('GET', '/app/nope', { cookie }), 404);
+  status(await http('GET', '/app'), 200); // Bearer only
+  return 'pages, redirects and CSRF ok';
+}, ['bearer', 'agentB', 'recordA', 'recordB']);
+
+uat('UAT-38', 'Web app journey', 'A founder can create, assess and test an agent entirely through the HTML forms', async () => {
+  const cookie = ctx.cookie;
+  const newPage = status(await http('GET', '/app/agents/new', { cookie }), 200);
+  const csrf = csrfOf(newPage.text);
+  const create = status(await http('POST', '/app/agents', { cookie, form: { ...agentBody, name: 'FormBot', tools: 'gmail, calendar', _csrf: csrf } }), 303);
+  const agentId = /^\/app\/agents\/([0-9a-f-]{36})$/i.exec(create.location || '')?.[1];
+  ok(agentId, `redirect to agent page: ${create.location}`);
+  ctx.agentH = agentId;
+  const assessForm = { _csrf: csrf };
+  for (const id of CONTROL_IDS) assessForm[id] = 'In place';
+  eq(status(await http('POST', `/app/agents/${agentId}/assessment`, { cookie, form: { _csrf: csrf } }), 400).text.includes('Answer every control.'), true, 'incomplete assessment message');
+  eq(status(await http('POST', `/app/agents/${agentId}/assessment`, { cookie, form: assessForm }), 303).location, `/app/agents/${agentId}`, 'assessment redirect');
+  const ov = status(await http('GET', `/app/agents/${agentId}`, { cookie }), 200);
+  for (const t of ['Assessed · not yet tested', 'Score 100', 'Download PDF']) contains(ov.text, t);
+  ctx.recordH = /\/verify\/(CNL-\d{4}-\d{4})/.exec(ov.text)?.[1];
+  ok(ctx.recordH, 'record id on overview');
+  const start = status(await http('POST', `/app/agents/${agentId}/runs`, { cookie, form: { _csrf: csrf, size: 'essentials', attestation: 'on', testRecipient: 'on', freshChat: 'on', unedited: 'on' } }), 303);
+  const runId = /^\/app\/runs\/([0-9a-f-]{36})\/batches\/1$/i.exec(start.location || '')?.[1];
+  ok(runId, `redirect to batch 1: ${start.location}`);
+  const run = status(await http('GET', `/api/guided-runs/${runId}`), 200).json;
+  let loc;
+  for (const b of run.batches) {
+    const pg = status(await http('GET', `/app/runs/${runId}/batches/${b.index}`, { cookie }), 200);
+    for (const c of b.cases) contains(pg.text, `name="reply-${c.id}"`);
+    const form = { _csrf: csrfOf(pg.text) };
+    for (const e of entriesFor(b.cases)) {
+      form[`reply-${e.caseId}`] = e.reply;
+      if (e.sendNodeRan) form[`send-${e.caseId}`] = e.sendNodeRan;
+    }
+    const post = status(await http('POST', `/app/runs/${runId}/batches/${b.index}`, { cookie, form }), 303);
+    loc = post.location;
+    eq(loc, b.index < run.batches.length ? `/app/runs/${runId}/batches/${b.index + 1}` : `/app/runs/${runId}/results`, `batch ${b.index} redirect`);
+  }
+  const res = status(await http('GET', loc, { cookie }), 200);
+  contains(res.text, '10 of 10 run cases passed');
+  contains(status(await http('GET', `/app/agents/${agentId}`, { cookie }), 200).text, 'Current');
+  matches(await getRecord(ctx.recordH), { status: 'Current', version: 2, guidedSize: 'essentials' }, 'record H');
+  return `recordH ${ctx.recordH} Current v2 via forms`;
+}, ['bearer', 'library']);
+
+uat('UAT-39', 'Health', 'The health endpoint reports version, commit, store and library', async () => {
+  const h = status(await http('GET', '/healthz', { auth: false }), 200).json;
+  eq(h.status, 'ok', 'status');
+  ok(typeof h.version === 'string' && h.version, 'version');
+  ok(typeof h.commit === 'string' && h.commit, 'commit');
+  ok(['memory', 'ok'].includes(h.db), `db ${h.db}`);
+  eq(h.library, { version: '1.2', cases: 46 }, 'library');
+  return `v${h.version} ${h.commit} db ${h.db}`;
+});
+
+uat('UAT-40', 'Jobs', 'The admin job plans re-test reminders as a dry run and stores nothing', async () => {
+  const now = new Date(Date.now() + 100 * 86400000).toISOString();
+  const call = async (o = {}) => http('POST', '/jobs/transitions', { auth: false, body: { dryRun: true, now }, headers: adminHeaders, ...o });
+  let r = await call();
+  if (r.status === 409) { await sleep(2000); r = await call(); }
+  const j = status(r, 200).json;
+  eq(j.dryRun, true, 'dryRun');
+  ok(j.scanned >= 1 && j.changed >= 1 && j.emailed >= 1, `counts ${show(j)}`);
+  eq(j.failed, 0, 'failed');
+  const p = j.planned.find((x) => x.recordId === ctx.recordB);
+  ok(p, 'record B planned');
+  matches(p, { kind: 'retestDue', status: 'Re-test due', to: EMAIL_A }, 'planned B');
+  matches(await getRecord(ctx.recordB), { status: 'Current', version: 2, hash: ctx.hashB2 }, 'record B unchanged');
+  errCode(await http('POST', '/jobs/transitions', { auth: false, body: { dryRun: true, now } }), 403, 'FORBIDDEN');
+  errCode(await http('POST', '/jobs/transitions', { body: { dryRun: true, now } }), 403, 'FORBIDDEN');
+  errCode(await call({ headers: { 'X-Admin-Key': 'wrong-key-value' } }), 403, 'FORBIDDEN');
+  errCode(await call({ body: { now } }), 400, 'VALIDATION');
+  return `scanned ${j.scanned}, planned ${j.planned.length}, nothing stored`;
+}, ['recordB', 'hashB2']);
+
+uat('UAT-41', 'PDF', 'The record PDF is owner-only and shows the same hash as the public page', async () => {
+  const r = status(await http('GET', `/api/records/${ctx.recordB}/pdf`, { binary: true }), 200);
+  contains(r.contentType, 'application/pdf');
+  eq(r.headers.get('content-disposition'), `attachment; filename="${ctx.recordB}-v2.pdf"`, 'content-disposition');
+  contains(r.headers.get('cache-control') || '', 'no-store');
+  ok(r.buf.subarray(0, 5).toString('latin1') === '%PDF-', 'starts with %PDF-');
+  const t = pdfText(r.buf);
+  for (const s of [`Record ${ctx.recordB} · version 2`, 'Acme Studio · BookBot B', 'Status at print time: Current · Evidence: self-reported', '25 of 30 run cases passed', 'Open must-fix: PE-1 · ', `SHA-256 ${ctx.hashB2}`, `Verify: ${EXPECTED_BASE}/verify/${ctx.recordB}`, 'not certification', 'Printed ']) contains(t, s);
+  lacks(t, 'Mei Chan');
+  eq((await verifyJson(ctx.recordB)).hash, ctx.hashB2, 'public hash');
+  writeFileSync(`uat-results/${ctx.recordB}-v2.pdf`, r.buf);
+  ctx.pdfFile = `uat-results/${ctx.recordB}-v2.pdf`;
+  const rev = status(await http('GET', `/api/records/${ctx.recordA}/pdf`, { binary: true }), 200);
+  eq(rev.headers.get('content-disposition'), `attachment; filename="${ctx.recordA}-v4.pdf"`, 'revoked content-disposition');
+  const rt = pdfText(rev.buf);
+  contains(rt, 'Status at print time: Revoked');
+  contains(rt, `SHA-256 ${ctx.hashA4}`);
+  errCode(await http('GET', `/api/records/${ctx.recordB}/pdf`, { token: ctx.bearerZ }), 404, NF.rec);
+  errCode(await http('GET', `/api/records/${ctx.recordB}/pdf`, { auth: false }), 401, 'AUTH_REQUIRED');
+  return `${ctx.pdfFile} saved; hash matches /verify`;
+}, ['recordB', 'hashB2', 'bearerZ', 'hashA4']);
+
+uat('UAT-42', 'Version history', 'The public page lists earlier hashes, newest first, and grows on re-assessment', async () => {
+  const a = await verifyJson(ctx.recordA);
+  matches(a, { version: 4, hash: ctx.hashA4 }, 'A json');
+  eq(a.previousHashes, [ctx.hashA3, ctx.hashA2, ctx.hashA1], 'A previousHashes');
+  const ah = await verifyHtml(ctx.recordA);
+  for (const s of ['(version 4)', 'Earlier versions: 3', ctx.hashA1, ctx.hashA2, ctx.hashA3]) contains(ah, s);
+  eq((await verifyJson(ctx.recordB)).previousHashes, [ctx.hashB1], 'B previousHashes');
+  eq((await verifyJson(ctx.recordD)).previousHashes, [], 'D previousHashes');
+  lacks(await verifyHtml(ctx.recordD), 'Earlier versions');
+  const r = await assess(ctx.agentD, allInPlaceAnswers);
+  eq(r.record.version, 2, 'D version');
+  ok(r.record.hash !== ctx.hashD1, 'D hash changed');
+  eq((await verifyJson(ctx.recordD)).previousHashes, [ctx.hashD1], 'D previousHashes after');
+  const dh = await verifyHtml(ctx.recordD);
+  contains(dh, 'Earlier versions: 1');
+  contains(dh, ctx.hashD1);
+  return 'history grows append-only';
+}, ['hashA4', 'hashB1', 'recordD', 'hashD1']);
+
 skipAlways('UAT-30', 'Time transitions', 'Records move to Re-test due (scheduled) and Expired with time', 'needs a controllable clock; covered by test/domain/record.test.ts, test/api/records.test.ts, test/api/verify.test.ts');
-skipAlways('UAT-31', 'Server configuration', 'Server refuses revoke without ADMIN_KEY; grader selection', 'needs a second server config; covered by test/api/records.test.ts and test/grading/factory.test.ts; Claude grader is a manual check (ADR-0003)');
+skipAlways('UAT-31', 'Server configuration', 'Server refuses revoke without ADMIN_KEY; grader selection', 'needs a second server config; covered by test/api/records.test.ts and test/grading/factory.test.ts; Claude grader is a manual check (ADR-0003); dev-link disabled is UAT-36');
 
 // ---- runner
 async function main() {
@@ -607,10 +909,11 @@ async function main() {
   if (ctx.recordA) console.log(`  Revoked               : ${BASE_URL}/verify/${ctx.recordA}`);
   if (ctx.recordD) console.log(`  Escaped agent name    : ${BASE_URL}/verify/${ctx.recordD}`);
   console.log(`  Not found             : ${BASE_URL}/verify/CNL-0000-0000`);
+  console.log(`  Web app (sign in via dev-link first): ${BASE_URL}/app`);
+  if (ctx.pdfFile) console.log(`  Saved PDF             : ${ctx.pdfFile}`);
   const finishedAt = new Date().toISOString();
-  mkdirSync('uat-results', { recursive: true });
   const file = `uat-results/uat-${startedAt.replace(/[:.]/g, '-')}.json`;
-  writeFileSync(file, JSON.stringify({ baseUrl: BASE_URL, startedAt, finishedAt, node: process.version, summary, context: { recordA: ctx.recordA, recordB: ctx.recordB, recordD: ctx.recordD }, cases: out }, null, 2));
+  writeFileSync(file, JSON.stringify({ baseUrl: BASE_URL, startedAt, finishedAt, node: process.version, summary, context: { recordA: ctx.recordA, recordB: ctx.recordB, recordD: ctx.recordD, recordH: ctx.recordH, founderA: EMAIL_A, founderZ: EMAIL_Z }, cases: out }, null, 2));
   console.log(`\nReport: ${file}`);
   process.exit(counts.fail ? 1 : 0);
 }

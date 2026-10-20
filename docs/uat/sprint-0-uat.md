@@ -13,6 +13,8 @@ This UAT proves, over HTTP against a running server and with no access to the co
 
 Notes: the run is re-runnable (it creates fresh agents each time). An early FAIL in the Agent A chain cascades to SKIP for dependent cases. A 403 on UAT-23 means the runner's `ADMIN_KEY` differs from the server's.
 
+**Sprint 1 note.** The script now signs in first (UAT-00, via `POST /auth/dev-link`), so the server needs `ALLOW_DEV_LOGIN=1`, `ADMIN_KEY` and `PUBLIC_BASE_URL` (equal to the runner's `BASE_URL`). Badge links are checked against `PUBLIC_BASE_URL`. UAT-08, 09, 17 and 18 also check the version-history text. See `docs/uat/sprint-1-uat.md` for the current run instructions and totals; the Sprint 0 results below are kept as history.
+
 ## Test data
 
 - BookBot (Acme Studio, owner Mei Chan): 8 In place, 3 Partly in place, 4 Missing gives a score of 57, High risk. Must-fix: PE-2, LA-2, LA-3, RO-4. Should-fix: MS-1, AE-1, CA-1. All 15 In place gives 100, Low risk.
