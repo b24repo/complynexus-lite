@@ -23,7 +23,8 @@ export function recordRoutes(deps: AppDeps): Router {
 
   router.get('/:recordId/badge', async (req, res) => {
     const record = await loadRecord(deps, req.params.recordId);
-    res.json({ ...badgeEligibility(record), verifyUrl: `${req.protocol}://${req.get('host')}/verify/${record.recordId}` });
+    const base = deps.publicBaseUrl ?? `${req.protocol}://${req.get('host')}`;
+    res.json({ ...badgeEligibility(record), verifyUrl: `${base}/verify/${record.recordId}` });
   });
 
   router.patch('/:recordId/public', async (req, res) => {

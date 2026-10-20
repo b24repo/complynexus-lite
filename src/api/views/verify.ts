@@ -109,7 +109,7 @@ function facts(v: PublicRecordView): [string, string][] {
   }
 }
 
-export function renderVerifyHtml(v: PublicRecordView): string {
+export function renderVerifyHtml(v: PublicRecordView, publicHost = 'verify.complynexus.com'): string {
   const pill = PILLS[v.status];
   const header = v.status === 'Assessed' ? `Record ${v.recordId} · snapshot` : `Record ${v.recordId} · v${v.version}`;
   const evidence =
@@ -135,7 +135,7 @@ export function renderVerifyHtml(v: PublicRecordView): string {
 <body>
 <header style="background:#fff;border-bottom:1px solid #E4E5F5;padding:14px 20px;display:flex;align-items:center;gap:10px">
 <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="6" fill="#595BFF"/></svg>
-<strong>ComplyNexus</strong> <span style="color:#5B5E7A;font-size:13px">verify.complynexus.com</span>
+<strong>ComplyNexus</strong> <span style="color:#5B5E7A;font-size:13px">${esc(publicHost)}</span>
 </header>
 <main style="max-width:640px;margin:24px auto;padding:0 16px">
 <div style="background:#fff;border:1px solid #E4E5F5;border-radius:12px;padding:24px">

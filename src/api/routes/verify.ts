@@ -37,6 +37,7 @@ export function toPublicView(r: ReadinessRecord): PublicRecordView {
 
 export function verifyRoutes(deps: AppDeps): Router {
   const router = asyncRouter();
+  const publicHost = deps.publicBaseUrl ? new URL(deps.publicBaseUrl).host : undefined;
 
   router.get('/:recordId.json', async (req, res) => {
     const r = toPublicView(await loadRecord(deps, req.params.recordId));
@@ -64,7 +65,7 @@ export function verifyRoutes(deps: AppDeps): Router {
   router.get('/:recordId', async (req, res) => {
     try {
       const view = toPublicView(await loadRecord(deps, req.params.recordId));
-      res.type('html').send(renderVerifyHtml(view));
+      res.type('html').send(renderVerifyHtml(view, publicHost));
     } catch (e) {
       if (e instanceof HttpError && e.status === 404) {
         res.status(404).type('html').send('<!doctype html><html><head><meta charset="utf-8"><title>Record not found</title></head><body><h1>Record not found</h1><p>No ComplyNexus Lite record matches this link.</p></body></html>');
