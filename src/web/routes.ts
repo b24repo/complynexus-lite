@@ -1,7 +1,7 @@
 import type { Response, Router } from 'express';
 import type { AppDeps } from '../api/deps';
 import { HttpError } from '../api/errors';
-import { asyncRouter, baseUrl } from '../api/helpers';
+import { asyncRouter, baseUrl, resolveBaseUrl } from '../api/helpers';
 import { founderOf } from '../api/middleware/auth';
 import { latestAssessment, recordForAgent } from '../api/helpers';
 import { AgentBody, AssessmentBody, BatchBody, ChangeBody, GuidedRunBody, PublicBody } from '../api/schemas';
@@ -80,7 +80,7 @@ export function appRoutes(deps: AppDeps): Router {
       // Ownership is checked first inside the usecase; validation only runs for the owner.
       await declareChange(deps, req.params.id, owner, () => {
         if (!parsed.success) throw parsed.error;
-      });
+      }, resolveBaseUrl(deps, req));
     } catch (err) {
       if (parsed.success || err !== parsed.error) throw err;
       const view = await agentOverview(deps, req.params.id, owner);

@@ -41,6 +41,7 @@ docker build --build-arg GIT_COMMIT=$(git rev-parse --short HEAD) -t complynexus
 | `GET /api/records/:recordId/badge` | badge eligibility |
 | `PATCH /api/records/:recordId/public` | show or hide the test summary |
 | `POST /api/records/:recordId/revoke` | admin only, header `X-Admin-Key` |
+| `POST /jobs/transitions` | admin only, header `X-Admin-Key`; body `{ dryRun?, now? }` (`now` only with `dryRun`); runs the re-test/expiry transitions and emails (409 `JOB_RUNNING` if already running) |
 | `GET /verify/:recordId`, `GET /verify/:recordId.json` | public page and public JSON |
 
 `/api/agents*`, `/api/guided-runs*` and the founder record routes (`GET /api/records/:recordId`,
@@ -79,8 +80,8 @@ Set `RESEND_API_KEY` and `MAIL_FROM` to send email through Resend; otherwise not
 
 `MongoRepository` is implemented (`src/infra/repo/mongo.ts`, ADR-0005). Set `MONGODB_URI` (and
 optionally `MONGODB_DB`) to use it, otherwise the server runs in memory; indexes are created at
-boot. Remaining porting work: a scheduler that runs `applyTimeTransitions` over all records
-(ticket L-31). For AWS, the Express app is a plain `createApp(deps)` and fits Lambda or a
+boot. The nightly transitions job is `npm run job:transitions` (`--dry-run`, `--now=<ISO>` with dry-run; see
+ADR-0008) or `POST /jobs/transitions`. For AWS, the Express app is a plain `createApp(deps)` and fits Lambda or a
 container (reuse one `MongoClient` across invocations).
 
 Agents created before S1-02 have no `founderId` and are orphaned: no founder can read them (404). Back-fill

@@ -14,7 +14,9 @@
     "test": "vitest run --coverage",
     "test:watch": "vitest",
     "dev": "tsx src/server.ts",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "job:transitions": "node dist/jobs/cli.js",
+    "job:transitions:dev": "tsx src/jobs/cli.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.39.0",

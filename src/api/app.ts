@@ -11,6 +11,7 @@ import { agentRoutes } from './routes/agents';
 import { authRoutes } from './routes/auth';
 import { guidedRoutes } from './routes/guided';
 import { healthRoutes } from './routes/health';
+import { jobRoutes } from './routes/jobs';
 import { recordRoutes } from './routes/records';
 import { verifyRoutes } from './routes/verify';
 import { appRoutes } from '../web/routes';
@@ -35,6 +36,7 @@ export function createApp(deps: AppDeps): Application {
   app.use('/api/guided-runs', auth);
   app.use('/api', guidedRoutes(deps));
   app.use('/api/records', recordRoutes(deps));
+  app.use('/jobs', jobRoutes(deps));
   app.use('/verify', rateLimit(deps.verifyRateLimit ?? { limit: 120, windowMs: 60_000 }), verifyRoutes(deps));
   app.use(notFoundHandler);
   app.use(errorHandler(deps.logger));

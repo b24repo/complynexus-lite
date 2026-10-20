@@ -51,9 +51,23 @@ export async function loadRecord(deps: AppDeps, recordId: string, owner: string 
   return next;
 }
 
-/** Origin for links in emails, badges and pages. */
+/**
+ * Origin for links in emails, badges and pages. Never trusts the Host header in production;
+ * elsewhere only for local dev hosts. Returns null when no safe origin exists.
+ */
+export function resolveBaseUrl(deps: AppDeps, req: Request): string | null {
+  if (deps.publicBaseUrl) return deps.publicBaseUrl;
+  const host = req.get('host') ?? '';
+  if (!deps.production && /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)) return `${req.protocol}://${host}`;
+  return null;
+}
+
+/** Like resolveBaseUrl but throws 500 PUBLIC_BASE_URL_REQUIRED when none is safe. */
 export function baseUrl(deps: AppDeps, req: Request): string {
-  return deps.publicBaseUrl ?? `${req.protocol}://${req.get('host')}`;
+  const base = resolveBaseUrl(deps, req);
+  if (base) return base;
+  deps.logger.error({ host: req.get('host') }, 'PUBLIC_BASE_URL is required to build links');
+  throw new HttpError(500, 'PUBLIC_BASE_URL_REQUIRED');
 }
 
 export async function requireRun(deps: AppDeps, runId: string, owner: string | null): Promise<GuidedRun> {

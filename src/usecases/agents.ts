@@ -9,6 +9,7 @@ import { CONTROLS, getControl } from '../domain/controls';
 import { applyAgentChange, applyReassessment, createAssessedRecord } from '../domain/record';
 import type { Agent, Assessment, ControlStatus, GuidedRun, OpenItem, ReadinessRecord } from '../domain/types';
 import { uuid } from '../infra/ids';
+import { agentChanged } from '../infra/notify/templates';
 
 export interface AssessmentView {
   assessment: Assessment;
@@ -86,6 +87,7 @@ export async function declareChange(
   agentId: string,
   owner: string | null,
   validate: () => void = () => undefined,
+  base: string | null = null,
 ): Promise<{ agent: Agent; record: ReadinessRecord | null }> {
   const agent = await requireAgent(deps, agentId, owner);
   validate();
@@ -93,11 +95,28 @@ export async function declareChange(
   const existing = await recordForAgent(deps, agent.id);
   let record: ReadinessRecord | null = null;
   if (existing) {
-    record = applyAgentChange(existing, now);
-    await deps.repos.records.update(record);
+    record = await deps.repos.records.update(applyAgentChange(existing, now));
+    if (existing.status === 'Current' && record.status === 'Re-test due') record = await emailAgentChanged(deps, agent, record, base, now);
   }
   const updated = await deps.repos.agents.update({ ...agent, changedAt: now.toISOString() });
   return { agent: updated, record };
+}
+
+/** Persisted first; the marker is set only after a successful send. Failures are left to the nightly job. */
+async function emailAgentChanged(deps: AppDeps, agent: Agent, record: ReadinessRecord, base: string | null, now: Date): Promise<ReadinessRecord> {
+  if (!base) {
+    deps.logger.warn({ recordId: record.recordId }, 'no safe base URL; agentChanged email left to the nightly job');
+    return record;
+  }
+  try {
+    const founder = await deps.repos.founders.getById(agent.founderId);
+    if (!founder) return record;
+    await deps.notifier.send({ to: founder.email, ...agentChanged(record, record.retestBy!, `${base}/verify/${record.recordId}`) });
+    return await deps.repos.records.update({ ...record, notifications: { ...record.notifications, retestDue: now.toISOString() } });
+  } catch (err) {
+    deps.logger.warn({ err, recordId: record.recordId }, 'agentChanged email failed; the nightly job retries');
+    return record;
+  }
 }
 
 export interface AgentListItem {

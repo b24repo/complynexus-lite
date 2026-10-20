@@ -1,6 +1,6 @@
 import type { Router } from 'express';
 import type { AppDeps } from '../deps';
-import { asyncRouter } from '../helpers';
+import { asyncRouter, resolveBaseUrl } from '../helpers';
 import { founderOf } from '../middleware/auth';
 import { AgentBody, AssessmentBody, ChangeBody } from '../schemas';
 import { createAgent, declareChange, getAgent, getAssessment, submitAssessment } from '../../usecases/agents';
@@ -25,7 +25,7 @@ export function agentRoutes(deps: AppDeps): Router {
   });
 
   router.post('/:id/changes', async (req, res) => {
-    res.json(await declareChange(deps, req.params.id, founderOf(res).id, () => void ChangeBody.parse(req.body)));
+    res.json(await declareChange(deps, req.params.id, founderOf(res).id, () => void ChangeBody.parse(req.body), resolveBaseUrl(deps, req)));
   });
 
   return router;
