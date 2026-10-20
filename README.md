@@ -17,6 +17,7 @@ npm run build
 npm run dev        # PORT=3000, copy .env.example to .env first
 SKIP_MONGO_TESTS=1 npm test  # skip the MongoDB tests (they download MongoDB 8.2.6 once)
 MONGODB_URI=mongodb://localhost:27017 npm run dev  # use MongoDB instead of memory
+docker build --build-arg GIT_COMMIT=$(git rev-parse --short HEAD) -t complynexus-lite:local .  # see docs/deploy/staging.md
 ```
 
 ## API
@@ -26,6 +27,7 @@ MONGODB_URI=mongodb://localhost:27017 npm run dev  # use MongoDB instead of memo
 | `POST /api/agents`, `GET /api/agents/:id` | create and read an agent profile |
 | `POST/GET /api/agents/:id/assessment` | 15 answers; creates or re-versions the record |
 | `POST /api/agents/:id/changes` | founder-declared agent change (CA-1) |
+| `GET /healthz` | readiness: version, commit, db, library (200 ok, 503 degraded) |
 | `GET /api/library` | the 46 test cases with prompts |
 | `POST /api/agents/:id/guided-runs` | start a guided run (attestation and safety booleans) |
 | `GET /api/guided-runs/:runId` | run with batch prompts |
@@ -69,3 +71,7 @@ optionally `MONGODB_DB`) to use it, otherwise the server runs in memory; indexes
 boot. Remaining porting work: a scheduler that runs `applyTimeTransitions` over all records
 (ticket L-31). For AWS, the Express app is a plain `createApp(deps)` and fits Lambda or a
 container (reuse one `MongoClient` across invocations).
+
+## Deploying
+
+See [docs/deploy/staging.md](docs/deploy/staging.md) and ADR-0006.

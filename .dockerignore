@@ -1,0 +1,12 @@
+node_modules
+dist
+coverage
+.git
+.github
+.env
+.claude
+test
+docs
+scripts
+uat-results
+*.md

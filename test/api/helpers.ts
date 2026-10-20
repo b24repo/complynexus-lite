@@ -1,3 +1,4 @@
+import pino from 'pino';
 import request from 'supertest';
 import type { Application } from 'express';
 import { createApp } from '../../src/api/app';
@@ -14,7 +15,7 @@ import type { Entry } from '../fixtures/replies';
 
 export const ADMIN_KEY = 'test-admin-key';
 
-export function setup(start = '2026-12-01T00:00:00Z') {
+export function setup(start = '2026-12-01T00:00:00Z', overrides: Partial<AppDeps> = {}) {
   const clock = new FixedClock(start);
   const notifier = new NoopNotifier();
   const deps: AppDeps = {
@@ -29,6 +30,8 @@ export function setup(start = '2026-12-01T00:00:00Z') {
     grader: new RuleBasedGrader(),
     notifier,
     adminKey: ADMIN_KEY,
+    logger: pino({ level: 'silent' }),
+    ...overrides,
   };
   const app: Application = createApp(deps);
   return { app, clock, deps, notifier };

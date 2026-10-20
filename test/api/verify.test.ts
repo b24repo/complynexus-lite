@@ -109,3 +109,25 @@ describe('verify page', () => {
     expect(json.body.error.code).toBe('RECORD_NOT_FOUND');
   });
 });
+
+describe('public base url', () => {
+  it('shows the default host when PUBLIC_BASE_URL is unset', async () => {
+    const { app } = setup();
+    const id = await createAgent(app);
+    const a = await assess(app, id);
+    const res = await request(app).get(`/verify/${a.body.record.recordId}`);
+    expect(res.text).toContain('verify.complynexus.com');
+  });
+
+  it('uses publicBaseUrl on the verify page and the badge verifyUrl', async () => {
+    const { app } = setup(undefined, { publicBaseUrl: 'https://staging.example.com' });
+    const id = await createAgent(app);
+    const a = await assess(app, id);
+    const recordId = a.body.record.recordId as string;
+    const page = await request(app).get(`/verify/${recordId}`);
+    expect(page.text).toContain('staging.example.com');
+    expect(page.text).not.toContain('verify.complynexus.com');
+    const badge = await request(app).get(`/api/records/${recordId}/badge`);
+    expect(badge.body.verifyUrl).toBe(`https://staging.example.com/verify/${recordId}`);
+  });
+});
