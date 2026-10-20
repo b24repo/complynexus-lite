@@ -39,7 +39,7 @@ describe('assessment page', () => {
   });
 
   it('rejects an incomplete form, accepts a full one and re-versions', async () => {
-    const { app } = await setup();
+    const { app, deps } = await setup();
     const id = await createAgentViaForm(app);
     const csrf = await csrfFor(app);
     const partial = answersBody();
@@ -49,8 +49,13 @@ describe('assessment page', () => {
     expect(bad.text).toMatch(/name="PE-2" value="In place" required checked/);
     await postForm(app, `/app/agents/${id}/assessment`, { _csrf: csrf, ...answersBody() }).expect(303);
     expect((await app.get(`/app/agents/${id}`)).text).toContain('Assessed · not yet tested');
+    const v1 = (await deps.repos.records.find((r) => r.agentId === id, { agentId: id }))[0];
+    expect(v1.version).toBe(1);
     await postForm(app, `/app/agents/${id}/assessment`, { _csrf: csrf, ...answersBody(bookbotAnswers) }).expect(303);
-    expect((await app.get(`/api/agents/${id}/assessment`)).body.assessment.version ?? 2).toBeGreaterThanOrEqual(2);
+    const v2 = (await deps.repos.records.find((r) => r.agentId === id, { agentId: id }))[0];
+    expect(v2.version).toBe(2);
+    expect(v2.hash).not.toBe(v1.hash);
+    expect((await app.get(`/api/agents/${id}/assessment`)).body.assessment.version).toBe(2);
   });
 });
 
