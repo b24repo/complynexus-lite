@@ -37,4 +37,4 @@ export const agentBody = {
   tools: ['gmail', 'calendar'],
 } as const;
 
-export const agentFixture: Agent = { id: 'agent-1', ...agentBody, tools: [...agentBody.tools], createdAt: '2026-10-10T00:00:00.000Z' };
+export const agentFixture: Agent = { id: 'agent-1', founderId: 'founder-1', ...agentBody, tools: [...agentBody.tools], createdAt: '2026-10-10T00:00:00.000Z' };

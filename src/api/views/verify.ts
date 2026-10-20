@@ -1,3 +1,4 @@
+import { PILLS, esc } from '../../web/views/layout';
 import { formatDate } from '../../domain/dates';
 import type { EvidenceLevel, GuidedSize, RecordStatus, RunMode, TestSummary } from '../../domain/types';
 
@@ -22,6 +23,7 @@ export interface PublicRecordView {
   evidenceLevel: EvidenceLevel | null;
   guidedSize: GuidedSize | null;
   hash: string;
+  previousHashes: string[];
   showTestSummary: boolean;
   testSummary: TestSummary | null;
   openMustFixCount: number;
@@ -29,23 +31,7 @@ export interface PublicRecordView {
   disclaimer: string;
 }
 
-export function esc(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
-interface PillStyle {
-  bg: string;
-  fg: string;
-  label: string;
-}
-
-const PILLS: Record<RecordStatus, PillStyle> = {
-  Assessed: { bg: '#F0F0FF', fg: '#3D3FD6', label: 'Assessed · not yet tested' },
-  Current: { bg: '#DCFCE7', fg: '#166534', label: 'Current' },
-  'Re-test due': { bg: '#FEF3C7', fg: '#92400E', label: 'Re-test due' },
-  Expired: { bg: '#F1F2F7', fg: '#334155', label: 'Expired' },
-  Revoked: { bg: '#FEE2E2', fg: '#991B1B', label: 'Revoked' },
-};
+export { esc };
 
 const D = (iso: string | null): string => (iso ? formatDate(iso) : '');
 
@@ -93,7 +79,7 @@ function boxes(v: PublicRecordView): string {
   return out.join('');
 }
 
-function facts(v: PublicRecordView): [string, string][] {
+export function facts(v: PublicRecordView): [string, string][] {
   const assessed: [string, string] = ['Assessed', D(v.assessedAt)];
   switch (v.status) {
     case 'Assessed':
@@ -109,7 +95,12 @@ function facts(v: PublicRecordView): [string, string][] {
   }
 }
 
-export function renderVerifyHtml(v: PublicRecordView): string {
+function earlier(hashes: string[]): string {
+  if (!hashes.length) return '';
+  return `<details style="font-size:12px;color:#5B5E7A"><summary style="cursor:pointer">Earlier versions: ${hashes.length}</summary><ul style="padding-left:18px;word-break:break-all">${hashes.map((h) => `<li>SHA-256 ${esc(h)}</li>`).join('')}</ul></details>`;
+}
+
+export function renderVerifyHtml(v: PublicRecordView, publicHost = 'verify.complynexus.com'): string {
   const pill = PILLS[v.status];
   const header = v.status === 'Assessed' ? `Record ${v.recordId} · snapshot` : `Record ${v.recordId} · v${v.version}`;
   const evidence =
@@ -135,7 +126,7 @@ export function renderVerifyHtml(v: PublicRecordView): string {
 <body>
 <header style="background:#fff;border-bottom:1px solid #E4E5F5;padding:14px 20px;display:flex;align-items:center;gap:10px">
 <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="6" fill="#595BFF"/></svg>
-<strong>ComplyNexus</strong> <span style="color:#5B5E7A;font-size:13px">verify.complynexus.com</span>
+<strong>ComplyNexus</strong> <span style="color:#5B5E7A;font-size:13px">${esc(publicHost)}</span>
 </header>
 <main style="max-width:640px;margin:24px auto;padding:0 16px">
 <div style="background:#fff;border:1px solid #E4E5F5;border-radius:12px;padding:24px">
@@ -145,7 +136,8 @@ export function renderVerifyHtml(v: PublicRecordView): string {
 <p style="font-size:14px;line-height:1.6">${esc(paragraph(v))}</p>
 ${boxes(v)}
 <dl style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:20px 0 0">${dl}</dl>
-<p style="font-size:12px;color:#5B5E7A;word-break:break-all;margin-top:20px">SHA-256 ${esc(v.hash)} · compare with the hash printed on the PDF</p>
+<p style="font-size:12px;color:#5B5E7A;word-break:break-all;margin-top:20px">SHA-256 ${esc(v.hash)} · compare with the hash printed on the PDF (version ${v.version})</p>
+${earlier(v.previousHashes)}
 ${box(DISCLAIMER)}
 <details style="margin-top:16px;font-size:14px"><summary style="cursor:pointer;color:#4446E0">What does this record mean?</summary>
 <p style="line-height:1.6">The company described its AI agent, answered a readiness assessment and had the agent tested by ComplyNexus Lite. Statuses: Assessed (scored, not yet tested) → Current (latest test on record) → Re-test due (after a change or every 3 months) → Expired (30 days without a re-test). Revoked is withdrawn by ComplyNexus.</p></details>

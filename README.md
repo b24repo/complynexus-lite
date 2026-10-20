@@ -4,8 +4,9 @@ Low-regret core of ComplyNexus Lite: the readiness record domain (state machine,
 canonical hash, 15-control assessment), the 46-case test library, the guided self-test engine
 with a rule-based grader, a thin JSON API and a server-rendered public verify page.
 
-Out of scope: endpoint test runner, auth, notifications and schedulers, fix-it plans, Mongo
-implementation, React UI. See `docs/adr/` for decisions.
+Out of scope: endpoint test runner, auth, notifications and schedulers, fix-it plans, React UI. See `docs/adr/` for decisions.
+
+Next: see [docs/roadmap/sprint-1.md](docs/roadmap/sprint-1.md) for the Sprint 1 plan.
 
 ## Commands
 
@@ -16,6 +17,10 @@ npm run lint
 npm test           # vitest with coverage thresholds (lines 80, functions 80, branches 75)
 npm run build
 npm run dev        # PORT=3000, copy .env.example to .env first
+SKIP_MONGO_TESTS=1 npm test  # skip the MongoDB tests (they download MongoDB 8.2.6 once)
+MONGODB_URI=mongodb://localhost:27017 npm run dev  # use MongoDB instead of memory
+docker build --build-arg GIT_COMMIT=$(git rev-parse --short HEAD) -t complynexus-lite:local .  # see docs/deploy/staging.md
+npm run uat        # black-box UAT against a running server (BASE_URL, ADMIN_KEY); CI runs it against an in-memory server
 npm run eval:grader  # manual, needs ANTHROPIC_API_KEY + ANTHROPIC_MODEL
 ```
 
@@ -23,9 +28,14 @@ npm run eval:grader  # manual, needs ANTHROPIC_API_KEY + ANTHROPIC_MODEL
 
 | Method and path | Purpose |
 |---|---|
+| `POST /auth/magic-link` | public; body `{ email }`; emails a single-use sign-in link (202, same answer for any email) |
+| `GET /auth/callback?token=` | public; consumes the link, sets the `cnl_session` cookie, 303 to `/auth/me` |
+| `POST /auth/logout`, `GET /auth/me` | end the session; show the signed-in founder |
+| `POST /auth/dev-link` | staging acceptance only: needs `ALLOW_DEV_LOGIN=1` and `X-Admin-Key`; returns a login link without email (404 otherwise) |
 | `POST /api/agents`, `GET /api/agents/:id` | create and read an agent profile |
 | `POST/GET /api/agents/:id/assessment` | 15 answers; creates or re-versions the record |
 | `POST /api/agents/:id/changes` | founder-declared agent change (CA-1) |
+| `GET /healthz` | readiness: version, commit, db, library (200 ok, 503 degraded) |
 | `GET /api/library` | the 46 test cases with prompts |
 | `POST /api/agents/:id/guided-runs` | start a guided run (attestation and safety booleans) |
 | `GET /api/guided-runs/:runId` | run with batch prompts |
@@ -33,9 +43,16 @@ npm run eval:grader  # manual, needs ANTHROPIC_API_KEY + ANTHROPIC_MODEL
 | `GET /api/guided-runs/:runId/results` | summary, failed cases, not-run groups |
 | `GET /api/records/:recordId` | record after time transitions |
 | `GET /api/records/:recordId/badge` | badge eligibility |
+| `GET /api/records/:recordId/pdf` | founder-only PDF of the record; its hash equals `/verify/:recordId.json` (ADR-0010) |
 | `PATCH /api/records/:recordId/public` | show or hide the test summary |
 | `POST /api/records/:recordId/revoke` | admin only, header `X-Admin-Key` |
-| `GET /verify/:recordId`, `GET /verify/:recordId.json` | public page and public JSON |
+| `POST /jobs/transitions` | admin only, header `X-Admin-Key`; body `{ dryRun?, now? }` (`now` only with `dryRun`); runs the re-test/expiry transitions and emails (409 `JOB_RUNNING` if already running) |
+| `GET /verify/:recordId`, `GET /verify/:recordId.json` | public page and public JSON (JSON includes `previousHashes`, earlier version hashes newest first) |
+
+`/api/agents*`, `/api/guided-runs*` and the founder record routes (`GET /api/records/:recordId`,
+`/badge`, `PATCH /public`) need the session cookie or `Authorization: Bearer <session token>`; a founder
+only sees their own agents, runs and records (another founder's id returns 404). `/api/library`, `/verify`,
+`/healthz` and `/auth/*` are public, and revoke stays admin-key only. Env: `ALLOW_DEV_LOGIN=1` (see `.env.example`).
 
 ## Rules to design boards
 
@@ -62,7 +79,23 @@ curl -s -X POST $B/api/agents/$A/guided-runs -H 'content-type: application/json'
 
 ## Porting
 
-Implement `MongoRepository` (collections `agents`, `assessments`, `guided_runs`,
-`readiness_records`, unique index on `recordId`), replace the in-memory sequence with a Mongo
-counter, and add a scheduler that runs `applyTimeTransitions` over all records (ticket L-31).
-For AWS, the Express app is a plain `createApp(deps)` and fits Lambda or a container.
+Route handlers delegate to `src/usecases/*`; the HTML UI (S1-04) and the JSON API share them.
+
+Set `RESEND_API_KEY` and `MAIL_FROM` to send email through Resend; otherwise notifications are printed.
+
+`MongoRepository` is implemented (`src/infra/repo/mongo.ts`, ADR-0005). Set `MONGODB_URI` (and
+optionally `MONGODB_DB`) to use it, otherwise the server runs in memory; indexes are created at
+boot. The nightly transitions job is `npm run job:transitions` (`--dry-run`, `--now=<ISO>` with dry-run; see
+ADR-0008) or `POST /jobs/transitions`. For AWS, the Express app is a plain `createApp(deps)` and fits Lambda or a
+container (reuse one `MongoClient` across invocations).
+
+Agents created before S1-02 have no `founderId` and are orphaned: no founder can read them (404). Back-fill
+`founderId` on existing documents when porting data (ADR-0007).
+
+## Deploying
+
+See [docs/deploy/staging.md](docs/deploy/staging.md) and ADR-0006.
+
+## Founder UI
+
+Server-rendered pages under `/app` (see ADR-0009): `/app/sign-in`, `/app` (dashboard), `/app/agents/new`, `/app/agents/:id` (overview, change declaration, public test summary toggle), `/app/agents/:id/assessment`, `/app/agents/:id/runs/new`, `/app/runs/:runId/batches/:n` and `/app/runs/:runId/results` (assessment, guided test run, batches, results). Every `/app` POST requires the `_csrf` form token; set `CSRF_SECRET` (falls back to `ADMIN_KEY`, then a random per-process value). Sign-in links print to the console when `RESEND_API_KEY` is unset. A form sign-in beyond the magic-link rate limit returns the JSON 429.
