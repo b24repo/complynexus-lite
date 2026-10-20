@@ -8,7 +8,7 @@
    - `MONGODB_DB=complynexus_lite`
    - `ADMIN_KEY`
    - `ANTHROPIC_API_KEY` (optional) and `ANTHROPIC_MODEL`
-   - `PUBLIC_BASE_URL=https://<service>.onrender.com`
+   - `PUBLIC_BASE_URL=https://<service>.onrender.com` (required when `NODE_ENV=production`: the server refuses to boot without it, because magic links must never be built from the request Host header)
    - `TRUST_PROXY=1` (required behind Render's proxy, otherwise the `/verify` rate limit is global)
    - `LOG_LEVEL=info`
    - `RESEND_API_KEY` and `MAIL_FROM`

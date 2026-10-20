@@ -52,6 +52,15 @@ export interface AppDeps {
   verifyRateLimit?: { limit: number; windowMs: number };
   trustProxy?: boolean;
   auth: AuthConfig;
+  /** NODE_ENV === 'production': magic links never use the request Host header. */
+  production?: boolean;
+}
+
+/** Throws when production would have to trust the Host header for emailed links. */
+export function assertProductionConfig(env: NodeJS.ProcessEnv): void {
+  if (env.NODE_ENV === 'production' && !publicBaseUrlFrom(env)) {
+    throw new Error('PUBLIC_BASE_URL is required when NODE_ENV=production (magic links must not use the request Host header)');
+  }
 }
 
 function publicBaseUrlFrom(env: NodeJS.ProcessEnv): string | undefined {
@@ -60,6 +69,7 @@ function publicBaseUrlFrom(env: NodeJS.ProcessEnv): string | undefined {
 }
 
 export function createDefaultDeps(env: NodeJS.ProcessEnv = process.env, logger: Logger = createLogger(env)): AppDeps {
+  assertProductionConfig(env);
   return {
     repos: {
       agents: new InMemoryRepository(),
@@ -79,6 +89,7 @@ export function createDefaultDeps(env: NodeJS.ProcessEnv = process.env, logger: 
     publicBaseUrl: publicBaseUrlFrom(env),
     trustProxy: env.TRUST_PROXY === '1',
     auth: authConfig(env),
+    production: env.NODE_ENV === 'production',
   };
 }
 
@@ -89,6 +100,7 @@ export async function createMongoDeps(
   env: NodeJS.ProcessEnv = process.env,
   logger: Logger = createLogger(env),
 ): Promise<{ deps: AppDeps; connection: MongoConnection }> {
+  assertProductionConfig(env);
   const connection = await connectMongo(uri, dbName);
   await ensureMongoIndexes(connection.db);
   const deps: AppDeps = {
@@ -102,6 +114,7 @@ export async function createMongoDeps(
     publicBaseUrl: publicBaseUrlFrom(env),
     trustProxy: env.TRUST_PROXY === '1',
     auth: authConfig(env),
+    production: env.NODE_ENV === 'production',
     ping: async () => {
       try {
         await connection.db.command({ ping: 1 });

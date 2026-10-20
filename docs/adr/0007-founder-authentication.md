@@ -23,6 +23,11 @@ test run or its record. That is a privacy problem for a service that holds promp
 - `expiresAt` and `usedAt` on login tokens and sessions are Dates, not ISO strings. This is an exception to
   ADR-0005, needed because Mongo TTL indexes only work on Date fields. Every read still compares against the
   injected clock, so the TTL index is housekeeping only.
+- Emailed links are built from `PUBLIC_BASE_URL`, never from the Host header in production (host-header poisoning
+  would mail a victim a working token for the attacker's domain). With `NODE_ENV=production` the server refuses
+  to boot without it. Outside production the Host fallback is allowed only for localhost/127.0.0.1; any other host
+  gets 500 `PUBLIC_BASE_URL_REQUIRED` and no email. `dev-link` builds its URL the same way.
+- Request logs redact `token`, `access_token` and `code` query values, so login tokens do not reach logs.
 - The magic-link response is identical for new and existing emails. Requests are rate limited per IP and per email.
 - No passwords, OAuth or teams.
 

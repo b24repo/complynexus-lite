@@ -20,7 +20,14 @@ export function authRoutes(deps: AppDeps): Router {
     now: nowMs,
     key: (req) => `email:${String((req.body as { email?: unknown } | undefined)?.email ?? '').toLowerCase()}`,
   });
-  const baseUrl = (req: Request) => deps.publicBaseUrl ?? `${req.protocol}://${req.get('host')}`;
+  /** Never trusts the Host header in production; elsewhere only for local dev hosts. */
+  const baseUrl = (req: Request): string => {
+    if (deps.publicBaseUrl) return deps.publicBaseUrl;
+    const host = req.get('host') ?? '';
+    if (!deps.production && /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)) return `${req.protocol}://${host}`;
+    deps.logger.error({ host }, 'PUBLIC_BASE_URL is required to build magic links');
+    throw new HttpError(500, 'PUBLIC_BASE_URL_REQUIRED');
+  };
 
   async function findOrCreateFounder(email: string): Promise<Founder> {
     const found = (await deps.repos.founders.find(() => true, { email }))[0];
@@ -38,6 +45,7 @@ export function authRoutes(deps: AppDeps): Router {
   }
 
   async function issueLoginLink(req: Request, email: string): Promise<{ token: string; url: string }> {
+    const base = baseUrl(req); // fail before creating anything
     const founder = await findOrCreateFounder(email);
     const token = newToken();
     const now = deps.clock.now();
@@ -49,7 +57,7 @@ export function authRoutes(deps: AppDeps): Router {
       expiresAt: new Date(now.getTime() + deps.auth.loginTokenTtlMs),
       usedAt: null,
     });
-    return { token, url: `${baseUrl(req)}/auth/callback?token=${token}` };
+    return { token, url: `${base}/auth/callback?token=${token}` };
   }
 
   router.post('/magic-link', perIp, perEmail, async (req, res) => {

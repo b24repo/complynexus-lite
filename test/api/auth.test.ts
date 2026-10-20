@@ -1,6 +1,7 @@
+import pino from 'pino';
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_AUTH, authConfig } from '../../src/api/deps';
+import { DEFAULT_AUTH, assertProductionConfig, authConfig, createDefaultDeps } from '../../src/api/deps';
 import { hashToken } from '../../src/infra/tokens';
 import { ADMIN_KEY, FOUNDER_A, setup } from './helpers';
 import type { NoopNotifier } from '../../src/infra/notify/notifier';
@@ -203,5 +204,59 @@ describe('route protection', () => {
     expect(revoke.status).toBe(403);
     expect(revoke.body.error.code).toBe('FORBIDDEN');
     expect((await anon.get('/healthz')).status).toBe(200);
+  });
+});
+
+describe('magic link base URL', () => {
+  it('uses publicBaseUrl and ignores a spoofed Host header', async () => {
+    const { anon, notifier } = await setup(undefined, { publicBaseUrl: 'https://staging.example.com' });
+    await anon.post('/auth/magic-link').set('Host', 'evil.example').send({ email: 'v@example.com' }).expect(202);
+    const text = notifier.sent.at(-1)!.text;
+    expect(text).toContain('https://staging.example.com/auth/callback?token=');
+    expect(text).not.toContain('evil.example');
+  });
+
+  it('rejects a non-local Host without publicBaseUrl and sends nothing', async () => {
+    const { anon, notifier, deps } = await setup();
+    const before = notifier.sent.length;
+    const tokens = await deps.repos.loginTokens.count();
+    const res = await anon.post('/auth/magic-link').set('Host', 'evil.example').send({ email: 'v@example.com' });
+    expect(res.status).toBe(500);
+    expect(res.body.error.code).toBe('PUBLIC_BASE_URL_REQUIRED');
+    expect(notifier.sent.length).toBe(before);
+    expect(await deps.repos.loginTokens.count()).toBe(tokens);
+  });
+
+  it('never falls back to the Host header in production', async () => {
+    const { anon, deps } = await setup();
+    deps.production = true; // after setup(), whose own sign-in needs a local host
+    const res = await anon.post('/auth/magic-link').send({ email: 'v@example.com' });
+    expect(res.status).toBe(500);
+    expect(res.body.error.code).toBe('PUBLIC_BASE_URL_REQUIRED');
+  });
+
+  it('dev-link builds its URL the same way', async () => {
+    const { anon } = await setup(undefined, { auth: { ...DEFAULT_AUTH, allowDevLogin: true } });
+    const res = await anon.post('/auth/dev-link').set('Host', 'evil.example').set('X-Admin-Key', ADMIN_KEY).send({ email: 'v@example.com' });
+    expect(res.status).toBe(500);
+  });
+
+  it('assertProductionConfig refuses to boot without PUBLIC_BASE_URL in production', () => {
+    expect(() => assertProductionConfig({ NODE_ENV: 'production' })).toThrow(/PUBLIC_BASE_URL/);
+    expect(() => assertProductionConfig({ NODE_ENV: 'production', PUBLIC_BASE_URL: 'https://x.example' })).not.toThrow();
+    expect(() => assertProductionConfig({ NODE_ENV: 'development' })).not.toThrow();
+    expect(() => createDefaultDeps({ NODE_ENV: 'production' })).toThrow(/PUBLIC_BASE_URL/);
+  });
+});
+
+describe('request log redaction', () => {
+  it('redacts the login token from the logged path', async () => {
+    const lines: string[] = [];
+    const logger = pino({ level: 'info' }, { write: (s: string) => void lines.push(s) });
+    const { anon } = await setup(undefined, { logger });
+    await anon.get('/auth/callback?token=abc');
+    const joined = lines.join('');
+    expect(joined).toContain('token=[REDACTED]');
+    expect(joined).not.toContain('token=abc');
   });
 });
