@@ -54,3 +54,8 @@ export const RevokeBody = z.object({ reason: z.string().min(1) });
 
 export const EmailBody = z.object({ email: z.string().trim().toLowerCase().email().max(254) });
 export const CallbackQuery = z.object({ token: z.string().regex(TOKEN_RE) });
+
+export type AgentInput = z.infer<typeof AgentBody>;
+export type AssessmentInput = z.infer<typeof AssessmentBody>;
+export type GuidedRunInput = z.infer<typeof GuidedRunBody>;
+export type BatchInput = z.infer<typeof BatchBody>;

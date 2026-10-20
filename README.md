@@ -73,6 +73,8 @@ curl -s -X POST $B/api/agents/$A/guided-runs -H 'content-type: application/json'
 
 ## Porting
 
+Route handlers delegate to `src/usecases/*`; the HTML UI (S1-04) and the JSON API share them.
+
 Set `RESEND_API_KEY` and `MAIL_FROM` to send email through Resend; otherwise notifications are printed.
 
 `MongoRepository` is implemented (`src/infra/repo/mongo.ts`, ADR-0005). Set `MONGODB_URI` (and
