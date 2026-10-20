@@ -143,6 +143,8 @@ export interface ReadinessRecord extends RecordSnapshot {
   revokedAt: string | null;
   revokeReason: string | null;
   showTestSummary: boolean;
+  /** Email dedup markers (ISO timestamps). Outside the hash snapshot and never in public JSON (ADR-0008). */
+  notifications?: { retestDue?: string; expired?: string; reminder?: string };
   createdAt: string;
   updatedAt: string;
 }

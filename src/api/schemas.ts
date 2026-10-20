@@ -59,3 +59,7 @@ export type AgentInput = z.infer<typeof AgentBody>;
 export type AssessmentInput = z.infer<typeof AssessmentBody>;
 export type GuidedRunInput = z.infer<typeof GuidedRunBody>;
 export type BatchInput = z.infer<typeof BatchBody>;
+
+export const TransitionsJobBody = z
+  .object({ dryRun: z.boolean().default(false), now: z.string().datetime({ offset: true }).optional() })
+  .refine((b) => !b.now || b.dryRun, { message: 'now is only allowed with dryRun', path: ['now'] });

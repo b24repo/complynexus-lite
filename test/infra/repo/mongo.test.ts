@@ -48,6 +48,7 @@ describe.skipIf(skip)('MongoRepository (mongodb-memory-server)', () => {
     await ensureMongoIndexes(db);
     const names = (await db.collection(COLLECTIONS.records).indexes()).map((i) => i.name);
     expect(names).toContain('uniq_recordId');
+    expect(names).toContain('status');
     const col = db.collection<{ _id: string; id: string; recordId: string; agentId: string }>(COLLECTIONS.records);
     await col.insertOne({ _id: 'x1', id: 'x1', recordId: 'CNL-2026-0001', agentId: 'a' });
     await expect(col.insertOne({ _id: 'x2', id: 'x2', recordId: 'CNL-2026-0001', agentId: 'b' })).rejects.toThrow(/E11000/);

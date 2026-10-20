@@ -67,3 +67,14 @@ export function agentChanged(record: RecordRef, retestBy: Date | string, verifyU
     verifyUrl,
   );
 }
+
+export function retestReminder(record: RecordRef, nextRetestBy: Date | string, verifyUrl: string): MailContent {
+  return build(
+    `Re-test due by ${formatDate(nextRetestBy)}: ${record.agentName} (${record.recordId})`,
+    [
+      `The scheduled re-test for ${record.orgName} · ${record.agentName} is due by ${formatDate(nextRetestBy)}.`,
+      'Re-test before then to keep the record Current. After that date there is a 30-day grace period before it expires.',
+    ],
+    verifyUrl,
+  );
+}

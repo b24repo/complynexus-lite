@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agentChanged, expired, magicLink, retestDueScheduled } from '../../../src/infra/notify/templates';
+import { agentChanged, expired, magicLink, retestDueScheduled, retestReminder } from '../../../src/infra/notify/templates';
 import type { RecordRef } from '../../../src/infra/notify/templates';
 
 const rec: RecordRef = { recordId: 'CNL-2026-0001', orgName: 'Acme', agentName: 'BookBot' };
@@ -30,6 +30,12 @@ describe('notify templates', () => {
     expect(agentChanged(rec, '2027-03-01T00:00:00Z', url).subject).toContain('1 Mar 2027');
   });
 
+  it('retestReminder puts the due date in the subject', () => {
+    const m = retestReminder(rec, '2027-03-01T00:00:00Z', url);
+    expect(m.subject).toContain('1 Mar 2027');
+    expect(m.text).toContain('30-day grace period');
+  });
+
   it('html escapes agent and org names', () => {
     const m = expired({ ...rec, agentName: '<script>alert(1)</script>', orgName: 'A&B' }, url);
     expect(m.html).toContain('&lt;script&gt;');
@@ -43,6 +49,7 @@ describe('notify templates', () => {
       retestDueScheduled(rec, '2027-03-01T00:00:00Z', url),
       expired(rec, url),
       agentChanged(rec, '2027-03-01T00:00:00Z', url),
+      retestReminder(rec, '2027-03-01T00:00:00Z', url),
     ];
     for (const m of all) {
       expect(m.text.endsWith('does not guarantee compliance or safety.')).toBe(true);

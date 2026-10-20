@@ -1,7 +1,7 @@
 import type { Request, Router } from 'express';
 import type { AppDeps } from '../deps';
 import { HttpError } from '../errors';
-import { asyncRouter } from '../helpers';
+import { asyncRouter, baseUrl as sharedBaseUrl } from '../helpers';
 import { requireAdminKey } from '../middleware/admin';
 import { SESSION_COOKIE, currentSession, founderOf, requireFounder, sessionCookieOptions } from '../middleware/auth';
 import { rateLimit } from '../middleware/rateLimit';
@@ -22,14 +22,7 @@ export function authRoutes(deps: AppDeps): Router {
     now: nowMs,
     key: (req) => `email:${String((req.body as { email?: unknown } | undefined)?.email ?? '').toLowerCase()}`,
   });
-  /** Never trusts the Host header in production; elsewhere only for local dev hosts. */
-  const baseUrl = (req: Request): string => {
-    if (deps.publicBaseUrl) return deps.publicBaseUrl;
-    const host = req.get('host') ?? '';
-    if (!deps.production && /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)) return `${req.protocol}://${host}`;
-    deps.logger.error({ host }, 'PUBLIC_BASE_URL is required to build magic links');
-    throw new HttpError(500, 'PUBLIC_BASE_URL_REQUIRED');
-  };
+  const baseUrl = (req: Request): string => sharedBaseUrl(deps, req);
 
   async function findOrCreateFounder(email: string): Promise<Founder> {
     const found = (await deps.repos.founders.find(() => true, { email }))[0];

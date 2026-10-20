@@ -100,6 +100,7 @@ export function createMongoRepos(db: Db): Repos {
 export async function ensureMongoIndexes(db: Db): Promise<void> {
   await db.collection(COLLECTIONS.records).createIndex({ recordId: 1 }, { unique: true, name: 'uniq_recordId' });
   await db.collection(COLLECTIONS.records).createIndex({ agentId: 1 }, { name: 'agentId' });
+  await db.collection(COLLECTIONS.records).createIndex({ status: 1 }, { name: 'status' });
   await db.collection(COLLECTIONS.assessments).createIndex({ agentId: 1, version: -1 }, { name: 'agentId_version' });
   await db.collection(COLLECTIONS.runs).createIndex({ agentId: 1, runNumber: -1 }, { name: 'agentId_runNumber' });
   // The unique login token hash is the document _id, so it needs no extra index.

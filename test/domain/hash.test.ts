@@ -49,4 +49,10 @@ describe('hash', () => {
     const changed = { ...r, status: 'Expired' as const, retestBy: '2027-01-01', showTestSummary: false };
     expect(recordHash(toSnapshot(changed))).toBe(r.hash);
   });
+  it('notification markers do not change the hash', () => {
+    const r = makeRecord();
+    const marked = { ...r, notifications: { retestDue: '2027-03-02T00:00:00.000Z' } };
+    expect(recordHash(toSnapshot(marked))).toBe(r.hash);
+    expect(toSnapshot(marked)).not.toHaveProperty('notifications');
+  });
 });

@@ -12,6 +12,10 @@
    - `TRUST_PROXY=1` (required behind Render's proxy, otherwise the `/verify` rate limit is global)
    - `LOG_LEVEL=info`
    - `RESEND_API_KEY` and `MAIL_FROM`
-4. **Cron job.** Placeholder: a Render cron job for the time-transition and reminder sweep arrives with S1-03b.
+4. **Nightly transitions job** (re-test reminders, Re-test due and Expired emails). Pick one:
+   - **A. Render cron job:** same image or repo, command `node dist/jobs/cli.js`, schedule `0 2 * * *`, same environment variables as the web service (including `MONGODB_URI`, `PUBLIC_BASE_URL`, `RESEND_API_KEY`, `MAIL_FROM`).
+   - **B. GitHub scheduled workflow** (`.github/workflows/transitions.yml`): calls `POST $STAGING_BASE_URL/jobs/transitions` with `X-Admin-Key`. Needs the `STAGING_BASE_URL` and `ADMIN_KEY` secrets; without them the run is skipped.
+
+   Acceptance: `curl -X POST $BASE/jobs/transitions -H "X-Admin-Key: $ADMIN_KEY" -H 'content-type: application/json' -d '{"dryRun":true,"now":"<ISO date 100 days ahead>"}'` lists the planned emails in `planned` and changes nothing. Run a dry run before the first real run: records that are already Re-test due or Expired get a one-time email.
 5. **Smoke check.** `curl -s $BASE/healthz` should return `"status":"ok"` and `"db":"ok"`. Then run `BASE_URL=$BASE ADMIN_KEY=... npm run uat` (the script arrives with PR #4).
-6. **GitHub secrets.** Only `RENDER_DEPLOY_HOOK_URL`; GHCR uses `GITHUB_TOKEN`.
+6. **GitHub secrets.** `RENDER_DEPLOY_HOOK_URL`; GHCR uses `GITHUB_TOKEN`. For the scheduled transitions workflow (option B) also `STAGING_BASE_URL` and `ADMIN_KEY`.

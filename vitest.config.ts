@@ -14,6 +14,7 @@ export default defineConfig({
         'src/usecases/**',
         'src/web/**',
         'src/infra/notify/**',
+        'src/jobs/transitions.ts',
         'src/api/middleware/**',
         'src/infra/tokens.ts',
       ],
