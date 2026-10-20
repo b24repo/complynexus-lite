@@ -1,12 +1,24 @@
-# ComplyNexus Lite POC (Sprint 0)
+# ComplyNexus Lite
 
-Low-regret core of ComplyNexus Lite: the readiness record domain (state machine, badge rule,
-canonical hash, 15-control assessment), the 46-case test library, the guided self-test engine
-with a rule-based grader, a thin JSON API and a server-rendered public verify page.
+AI agent readiness records for one-person companies. Sprint 0 built the core: the record domain
+(state machine, badge rule, canonical hash, 15-control assessment), the 46-case test library, the
+guided self-test engine with a rule-based grader, a JSON API and the public verify page. Sprint 1
+added MongoDB, magic-link sign-in with per-founder ownership, the server-rendered founder app
+(`/app`), re-test and expiry emails, the PDF record with version history, and a staging-ready
+container. See `docs/adr/` for decisions and [docs/roadmap/sprint-1.md](docs/roadmap/sprint-1.md).
 
-Out of scope: endpoint test runner, auth, notifications and schedulers, fix-it plans, React UI. See `docs/adr/` for decisions.
+Out of scope so far: endpoint test runner, fix-it plans, React UI, billing.
 
-Next: see [docs/roadmap/sprint-1.md](docs/roadmap/sprint-1.md) for the Sprint 1 plan.
+## Try it locally (production-like)
+
+```bash
+docker compose up -d --build    # app + MongoDB on http://localhost:3000
+docker compose logs -f app      # sign-in links are printed here (no email provider locally)
+```
+
+Open http://localhost:3000/app/sign-in, enter any email, and open the link from the logs. Run
+`BASE_URL=http://localhost:3000 ADMIN_KEY=local-admin-key npm run uat` for the 43-case UAT.
+`docker compose down -v` removes everything.
 
 ## Commands
 

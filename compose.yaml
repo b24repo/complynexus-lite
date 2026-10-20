@@ -1,0 +1,36 @@
+# Production-like local stack: the same image the deploy workflow builds, plus MongoDB.
+#   docker compose up -d --build       then open http://localhost:3000/app/sign-in
+#   docker compose logs -f app         sign-in links are printed here (no email provider locally)
+#   docker compose down                add -v to also delete the database volume
+name: cnl-local
+services:
+  mongo:
+    image: mongo:7.0
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  app:
+    build:
+      context: .
+      args:
+        GIT_COMMIT: local
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DB: complynexus_lite
+      PUBLIC_BASE_URL: http://localhost:3000
+      ADMIN_KEY: local-admin-key # local only; never reuse in a real environment
+      ALLOW_DEV_LOGIN: "1" # local only; enables POST /auth/dev-link
+      ANTHROPIC_API_KEY: ""
+      LOG_LEVEL: info
+volumes:
+  mongo-data:
