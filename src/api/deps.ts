@@ -14,6 +14,7 @@ import type { Notifier } from '../infra/notify/notifier';
 import { MongoRecordIdSource } from '../infra/repo/mongoIds';
 import { createMongoRepos, ensureMongoIndexes } from '../infra/repo/mongo';
 import type { Repos } from '../infra/repo/repository';
+import { csrfSecretFrom } from '../web/csrf';
 
 export interface AuthConfig {
   sessionTtlMs: number;
@@ -27,7 +28,7 @@ export interface AuthConfig {
 export const DEFAULT_AUTH: AuthConfig = {
   sessionTtlMs: 30 * 24 * 3600_000,
   loginTokenTtlMs: 15 * 60_000,
-  redirectPath: '/auth/me',
+  redirectPath: '/app',
   allowDevLogin: false,
   magicLinkRateLimit: { limit: 5, windowMs: 60_000 },
 };
@@ -52,6 +53,8 @@ export interface AppDeps {
   verifyRateLimit?: { limit: number; windowMs: number };
   trustProxy?: boolean;
   auth: AuthConfig;
+  /** HMAC secret for /app form tokens. */
+  csrfSecret: string;
   /** NODE_ENV === 'production': magic links never use the request Host header. */
   production?: boolean;
 }
@@ -89,6 +92,7 @@ export function createDefaultDeps(env: NodeJS.ProcessEnv = process.env, logger: 
     publicBaseUrl: publicBaseUrlFrom(env),
     trustProxy: env.TRUST_PROXY === '1',
     auth: authConfig(env),
+    csrfSecret: csrfSecretFrom(env),
     production: env.NODE_ENV === 'production',
   };
 }
@@ -114,6 +118,7 @@ export async function createMongoDeps(
     publicBaseUrl: publicBaseUrlFrom(env),
     trustProxy: env.TRUST_PROXY === '1',
     auth: authConfig(env),
+    csrfSecret: csrfSecretFrom(env),
     production: env.NODE_ENV === 'production',
     ping: async () => {
       try {

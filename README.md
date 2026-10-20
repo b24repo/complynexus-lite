@@ -89,3 +89,7 @@ Agents created before S1-02 have no `founderId` and are orphaned: no founder can
 ## Deploying
 
 See [docs/deploy/staging.md](docs/deploy/staging.md) and ADR-0006.
+
+## Founder UI
+
+Server-rendered pages under `/app` (see ADR-0009): `/app/sign-in`, `/app` (dashboard), `/app/agents/new`, `/app/agents/:id` (overview, change declaration, public test summary toggle). Every `/app` POST requires the `_csrf` form token; set `CSRF_SECRET` (falls back to `ADMIN_KEY`, then a random per-process value). Sign-in links print to the console when `RESEND_API_KEY` is unset. A form sign-in beyond the magic-link rate limit returns the JSON 429.

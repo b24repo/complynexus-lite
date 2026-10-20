@@ -11,6 +11,8 @@ import { uuid } from '../../infra/ids';
 import { magicLink } from '../../infra/notify/templates';
 import { hashToken, newToken } from '../../infra/tokens';
 
+const isForm = (req: Request): boolean => !!req.is('application/x-www-form-urlencoded');
+
 export function authRoutes(deps: AppDeps): Router {
   const router = asyncRouter();
   const nowMs = () => deps.clock.now().getTime();
@@ -61,10 +63,22 @@ export function authRoutes(deps: AppDeps): Router {
   }
 
   router.post('/magic-link', perIp, perEmail, async (req, res) => {
-    const { email } = EmailBody.parse(req.body);
+    const parsed = EmailBody.safeParse(req.body);
+    if (!parsed.success) {
+      if (isForm(req)) {
+        res.redirect(303, '/app/sign-in?error=email');
+        return;
+      }
+      throw parsed.error;
+    }
+    const { email } = parsed.data;
     const { url } = await issueLoginLink(req, email);
     await deps.notifier.send({ to: email, ...magicLink(url) });
     // Identical whether or not the email already existed.
+    if (isForm(req)) {
+      res.redirect(303, '/app/sign-in/sent');
+      return;
+    }
     res.status(202).json({ ok: true });
   });
 
@@ -88,6 +102,10 @@ export function authRoutes(deps: AppDeps): Router {
     const cur = await currentSession(deps, req);
     if (cur) await deps.repos.sessions.delete(cur.session.id);
     res.clearCookie(SESSION_COOKIE, { ...sessionCookieOptions(req, deps), maxAge: undefined });
+    if (isForm(req)) {
+      res.redirect(303, '/app/sign-in');
+      return;
+    }
     res.status(204).end();
   });
 

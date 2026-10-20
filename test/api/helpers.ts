@@ -50,6 +50,7 @@ export async function setup(start = '2026-12-01T00:00:00Z', overrides: Partial<A
     grader: new RuleBasedGrader(),
     notifier,
     adminKey: ADMIN_KEY,
+    csrfSecret: 'test-csrf-secret',
     logger: pino({ level: 'silent' }),
     // Long sessions so the time-travelling record tests (months ahead) stay signed in; auth.test.ts overrides this.
     auth: { ...DEFAULT_AUTH, sessionTtlMs: 10 * 365 * 24 * 3600_000 },

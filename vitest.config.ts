@@ -12,6 +12,7 @@ export default defineConfig({
         'src/grading/ruleBased.ts',
         'src/library/**',
         'src/usecases/**',
+        'src/web/**',
         'src/infra/notify/**',
         'src/api/middleware/**',
         'src/infra/tokens.ts',
