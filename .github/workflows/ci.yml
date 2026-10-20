@@ -22,3 +22,45 @@ jobs:
           MONGOMS_VERSION: '8.2.6'
           MONGOMS_DOWNLOAD_DIR: ~/.cache/mongodb-binaries
       - run: npm run build
+  uat:
+    runs-on: ubuntu-latest
+    env:
+      MONGOMS_DISABLE_POSTINSTALL: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Start the server in memory
+        env:
+          PORT: '3000'
+          ADMIN_KEY: ci-admin-key
+          ALLOW_DEV_LOGIN: '1'
+          PUBLIC_BASE_URL: http://localhost:3000
+          ANTHROPIC_API_KEY: ''
+          LOG_LEVEL: warn
+        run: |
+          node dist/server.js > server.log 2>&1 &
+          echo $! > server.pid
+          for i in $(seq 1 30); do curl -fsS http://localhost:3000/healthz >/dev/null 2>&1 && break; sleep 1; done
+          curl -fsS http://localhost:3000/healthz | grep -q '"status":"ok"'
+      - name: Black-box UAT
+        env:
+          BASE_URL: http://localhost:3000
+          ADMIN_KEY: ci-admin-key
+        run: npm run uat
+      - name: Stop the server
+        if: always()
+        run: kill "$(cat server.pid)" 2>/dev/null || true
+      - name: Upload UAT results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uat-results
+          path: |
+            uat-results/
+            server.log
+          if-no-files-found: warn
