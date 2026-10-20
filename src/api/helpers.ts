@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import type { RequestHandler } from 'express';
+import type { Request, RequestHandler } from 'express';
 import type { AppDeps } from './deps';
 import { HttpError } from './errors';
 import { applyTimeTransitions } from '../domain/record';
@@ -49,6 +49,17 @@ export async function loadRecord(deps: AppDeps, recordId: string, owner: string 
   const next = applyTimeTransitions(stored, deps.clock.now());
   if (next.status !== stored.status) await deps.repos.records.update(next);
   return next;
+}
+
+/** Origin for links in emails, badges and pages. */
+export function baseUrl(deps: AppDeps, req: Request): string {
+  return deps.publicBaseUrl ?? `${req.protocol}://${req.get('host')}`;
+}
+
+export async function requireRun(deps: AppDeps, runId: string, owner: string | null): Promise<GuidedRun> {
+  const run = await deps.repos.runs.getById(runId);
+  if (!run || !(await ownsAgent(deps, run.agentId, owner))) throw new HttpError(404, 'RUN_NOT_FOUND');
+  return run;
 }
 
 /** Express 4 does not catch rejected promises, so wrap every async handler. */

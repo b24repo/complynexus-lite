@@ -11,6 +11,7 @@ export default defineConfig({
         'src/grading/redact.ts',
         'src/grading/ruleBased.ts',
         'src/library/**',
+        'src/usecases/**',
         'src/infra/notify/**',
         'src/api/middleware/**',
         'src/infra/tokens.ts',

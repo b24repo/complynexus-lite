@@ -56,6 +56,25 @@ describe('per-founder ownership', () => {
     }
   });
 
+  it("returns 404, not 400, when another founder sends an invalid body to someone else's resource", async () => {
+    const { b, a } = await twoFounders();
+    const agentCalls = [
+      await b.post(`/api/agents/${a.agentId}/assessment`).send({}),
+      await b.post(`/api/agents/${a.agentId}/changes`).send({}),
+      await b.post(`/api/agents/${a.agentId}/guided-runs`).send({}),
+    ];
+    for (const r of agentCalls) {
+      expect(r.status).toBe(404);
+      expect(r.body.error.code).toBe('AGENT_NOT_FOUND');
+    }
+    const run = await b.post(`/api/guided-runs/${a.runId}/batches/1`).send({});
+    expect(run.status).toBe(404);
+    expect(run.body.error.code).toBe('RUN_NOT_FOUND');
+    const rec = await b.patch(`/api/records/${a.recordId}/public`).send({});
+    expect(rec.status).toBe(404);
+    expect(rec.body.error.code).toBe('RECORD_NOT_FOUND');
+  });
+
   it('stores the creating founder on the agent but keeps it out of the record hash snapshot', async () => {
     const { app, deps, a } = await setup().then(async (c) => ({ ...c, a: await testedAgent(c.app) }));
     const me = (await app.get('/auth/me')).body.founder;
