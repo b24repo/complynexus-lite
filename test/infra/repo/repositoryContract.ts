@@ -62,6 +62,14 @@ export function repositoryContract(name: string, fresh: () => Promise<Repository
       expect((await repo.find(() => true, { agentId: 'a1', status: 'done' })).map((d) => d.id)).toEqual(['3']);
       expect((await repo.find((d) => d.id === '1', { agentId: 'a1' })).map((d) => d.id)).toEqual(['1']);
     });
+    it('delete removes the document and returns true, false for unknown', async () => {
+      const repo = await fresh();
+      await repo.insert(doc('1'));
+      expect(await repo.delete('1')).toBe(true);
+      expect(await repo.getById('1')).toBeNull();
+      expect(await repo.delete('1')).toBe(false);
+      expect(await repo.delete('nope')).toBe(false);
+    });
     it('count counts all documents', async () => {
       const repo = await fresh();
       expect(await repo.count()).toBe(0);

@@ -21,6 +21,7 @@ async function main(): Promise<void> {
     deps = createDefaultDeps(process.env, log);
     log.warn('using in-memory repositories (set MONGODB_URI for MongoDB)');
   }
+  if (deps.auth.allowDevLogin) log.warn('ALLOW_DEV_LOGIN=1: POST /auth/dev-link is enabled. Never set this in production.');
   const server = createApp(deps).listen(port, () => {
     log.info({ port, db }, 'listening');
   });

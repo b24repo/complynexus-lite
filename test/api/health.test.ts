@@ -1,12 +1,11 @@
-import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { setup } from './helpers';
 import { LIBRARY_VERSION } from '../../src/library/library';
 
 describe('GET /healthz', () => {
   it('reports ok in memory mode', async () => {
-    const { app } = setup();
-    const res = await request(app).get('/healthz');
+    const { app } = await setup();
+    const res = await app.get('/healthz');
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
       status: 'ok',
@@ -18,15 +17,15 @@ describe('GET /healthz', () => {
   });
 
   it('returns 503 when the db ping fails', async () => {
-    const { app } = setup(undefined, { ping: async () => 'down' });
-    const res = await request(app).get('/healthz');
+    const { app } = await setup(undefined, { ping: async () => 'down' });
+    const res = await app.get('/healthz');
     expect(res.status).toBe(503);
     expect(res.body).toMatchObject({ status: 'degraded', db: 'down' });
   });
 
   it('reports db ok when ping succeeds', async () => {
-    const { app } = setup(undefined, { ping: async () => 'ok' });
-    const res = await request(app).get('/healthz');
+    const { app } = await setup(undefined, { ping: async () => 'ok' });
+    const res = await app.get('/healthz');
     expect(res.status).toBe(200);
     expect(res.body.db).toBe('ok');
   });

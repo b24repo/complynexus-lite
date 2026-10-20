@@ -2,8 +2,9 @@ import type { Router } from 'express';
 import type { AppDeps } from '../deps';
 import { asyncRouter } from '../helpers';
 import { HttpError } from '../errors';
+import { founderOf } from '../middleware/auth';
 import { BatchBody, GuidedRunBody } from '../schemas';
-import { currentOpenItems, latestAssessment, loadRecord, recordForAgent, requireAgent } from '../helpers';
+import { currentOpenItems, latestAssessment, loadRecord, ownsAgent, recordForAgent, requireAgent } from '../helpers';
 import { applyTestCompleted } from '../../domain/record';
 import { testOpenItems } from '../../domain/scoring';
 import { DomainError } from '../../domain/types';
@@ -25,7 +26,7 @@ export function guidedRoutes(deps: AppDeps): Router {
   const router = asyncRouter();
 
   router.post('/agents/:id/guided-runs', async (req, res) => {
-    const agent = await requireAgent(deps, req.params.id);
+    const agent = await requireAgent(deps, req.params.id, founderOf(res).id);
     const body = GuidedRunBody.parse(req.body);
     const assessment = await latestAssessment(deps, agent.id);
     if (!assessment) throw new DomainError('ASSESSMENT_REQUIRED');
@@ -37,18 +38,18 @@ export function guidedRoutes(deps: AppDeps): Router {
     res.status(201).json(run);
   });
 
-  const requireRun = async (id: string): Promise<GuidedRun> => {
+  const requireRun = async (id: string, owner: string): Promise<GuidedRun> => {
     const run = await deps.repos.runs.getById(id);
-    if (!run) throw new HttpError(404, 'RUN_NOT_FOUND');
+    if (!run || !(await ownsAgent(deps, run.agentId, owner))) throw new HttpError(404, 'RUN_NOT_FOUND');
     return run;
   };
 
   router.get('/guided-runs/:runId', async (req, res) => {
-    res.json(expandRun(await requireRun(req.params.runId)));
+    res.json(expandRun(await requireRun(req.params.runId, founderOf(res).id)));
   });
 
   router.post('/guided-runs/:runId/batches/:index', async (req, res) => {
-    const run = await requireRun(req.params.runId);
+    const run = await requireRun(req.params.runId, founderOf(res).id);
     const { entries } = BatchBody.parse(req.body);
     const index = Number(req.params.index);
     const now = deps.clock.now();
@@ -60,7 +61,7 @@ export function guidedRoutes(deps: AppDeps): Router {
     if (updated.status === 'completed') {
       const stored = await recordForAgent(deps, run.agentId);
       if (!stored) throw new HttpError(404, 'RECORD_NOT_FOUND');
-      const current = await loadRecord(deps, stored.recordId);
+      const current = await loadRecord(deps, stored.recordId, founderOf(res).id);
       const assessment = (await latestAssessment(deps, run.agentId))!;
       const library = loadLibrary();
       const openItems = await currentOpenItems(deps, assessment, updated);
@@ -80,7 +81,7 @@ export function guidedRoutes(deps: AppDeps): Router {
   });
 
   router.get('/guided-runs/:runId/results', async (req, res) => {
-    const run = await requireRun(req.params.runId);
+    const run = await requireRun(req.params.runId, founderOf(res).id);
     const library = loadLibrary();
     const assessment = await latestAssessment(deps, run.agentId);
     const summary = runSummary(run, library);

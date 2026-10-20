@@ -1,7 +1,8 @@
-import type { Repository } from './repository';
+import type { LoginToken } from '../../domain/types';
+import type { LoginTokenStore, Repository } from './repository';
 
 export class InMemoryRepository<T extends { id: string }> implements Repository<T> {
-  private readonly items = new Map<string, T>();
+  protected readonly items = new Map<string, T>();
 
   async insert(item: T): Promise<T> {
     if (this.items.has(item.id)) throw new Error(`Duplicate id ${item.id}`);
@@ -26,5 +27,18 @@ export class InMemoryRepository<T extends { id: string }> implements Repository<
   }
   async count(): Promise<number> {
     return this.items.size;
+  }
+  async delete(id: string): Promise<boolean> {
+    return this.items.delete(id);
+  }
+}
+
+export class InMemoryLoginTokenStore extends InMemoryRepository<LoginToken> implements LoginTokenStore {
+  async consume(tokenHash: string, now: Date): Promise<LoginToken | null> {
+    // No await before the write: that is what makes the check-and-mark atomic.
+    const t = this.items.get(tokenHash);
+    if (!t || t.usedAt !== null || t.expiresAt.getTime() <= now.getTime()) return null;
+    t.usedAt = new Date(now.getTime());
+    return structuredClone(t);
   }
 }

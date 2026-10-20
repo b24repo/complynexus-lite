@@ -24,6 +24,10 @@ docker build --build-arg GIT_COMMIT=$(git rev-parse --short HEAD) -t complynexus
 
 | Method and path | Purpose |
 |---|---|
+| `POST /auth/magic-link` | public; body `{ email }`; emails a single-use sign-in link (202, same answer for any email) |
+| `GET /auth/callback?token=` | public; consumes the link, sets the `cnl_session` cookie, 303 to `/auth/me` |
+| `POST /auth/logout`, `GET /auth/me` | end the session; show the signed-in founder |
+| `POST /auth/dev-link` | staging acceptance only: needs `ALLOW_DEV_LOGIN=1` and `X-Admin-Key`; returns a login link without email (404 otherwise) |
 | `POST /api/agents`, `GET /api/agents/:id` | create and read an agent profile |
 | `POST/GET /api/agents/:id/assessment` | 15 answers; creates or re-versions the record |
 | `POST /api/agents/:id/changes` | founder-declared agent change (CA-1) |
@@ -38,6 +42,11 @@ docker build --build-arg GIT_COMMIT=$(git rev-parse --short HEAD) -t complynexus
 | `PATCH /api/records/:recordId/public` | show or hide the test summary |
 | `POST /api/records/:recordId/revoke` | admin only, header `X-Admin-Key` |
 | `GET /verify/:recordId`, `GET /verify/:recordId.json` | public page and public JSON |
+
+`/api/agents*`, `/api/guided-runs*` and the founder record routes (`GET /api/records/:recordId`,
+`/badge`, `PATCH /public`) need the session cookie or `Authorization: Bearer <session token>`; a founder
+only sees their own agents, runs and records (another founder's id returns 404). `/api/library`, `/verify`,
+`/healthz` and `/auth/*` are public, and revoke stays admin-key only. Env: `ALLOW_DEV_LOGIN=1` (see `.env.example`).
 
 ## Rules to design boards
 
@@ -71,6 +80,9 @@ optionally `MONGODB_DB`) to use it, otherwise the server runs in memory; indexes
 boot. Remaining porting work: a scheduler that runs `applyTimeTransitions` over all records
 (ticket L-31). For AWS, the Express app is a plain `createApp(deps)` and fits Lambda or a
 container (reuse one `MongoClient` across invocations).
+
+Agents created before S1-02 have no `founderId` and are orphaned: no founder can read them (404). Back-fill
+`founderId` on existing documents when porting data (ADR-0007).
 
 ## Deploying
 

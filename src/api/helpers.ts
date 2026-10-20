@@ -8,10 +8,17 @@ import { assessmentOpenItems } from '../domain/assessment';
 import type { Agent, Assessment, GuidedRun, OpenItem, ReadinessRecord } from '../domain/types';
 import { loadLibrary } from '../library/library';
 
-export async function requireAgent(deps: AppDeps, id: string): Promise<Agent> {
+/** `owner` null means public/admin access (no ownership check). Another founder's agent is a 404, never a 403. */
+export async function requireAgent(deps: AppDeps, id: string, owner: string | null): Promise<Agent> {
   const agent = await deps.repos.agents.getById(id);
-  if (!agent) throw new HttpError(404, 'AGENT_NOT_FOUND');
+  if (!agent || (owner !== null && agent.founderId !== owner)) throw new HttpError(404, 'AGENT_NOT_FOUND');
   return agent;
+}
+
+export async function ownsAgent(deps: AppDeps, agentId: string, owner: string | null): Promise<boolean> {
+  if (owner === null) return true;
+  const agent = await deps.repos.agents.getById(agentId);
+  return !!agent && agent.founderId === owner;
 }
 
 export async function latestAssessment(deps: AppDeps, agentId: string): Promise<Assessment | null> {
@@ -36,9 +43,9 @@ export async function currentOpenItems(deps: AppDeps, assessment: Assessment, ru
 }
 
 /** Loads a record and applies lazy time transitions, persisting when they changed it. */
-export async function loadRecord(deps: AppDeps, recordId: string): Promise<ReadinessRecord> {
+export async function loadRecord(deps: AppDeps, recordId: string, owner: string | null): Promise<ReadinessRecord> {
   const stored = await deps.repos.records.getById(recordId);
-  if (!stored) throw new HttpError(404, 'RECORD_NOT_FOUND');
+  if (!stored || !(await ownsAgent(deps, stored.agentId, owner))) throw new HttpError(404, 'RECORD_NOT_FOUND');
   const next = applyTimeTransitions(stored, deps.clock.now());
   if (next.status !== stored.status) await deps.repos.records.update(next);
   return next;

@@ -13,6 +13,7 @@ export default defineConfig({
         'src/library/**',
         'src/infra/notify/**',
         'src/api/middleware/**',
+        'src/infra/tokens.ts',
       ],
       exclude: ['src/grading/claude.ts', 'src/infra/repo/mongo.ts', 'src/server.ts'],
       reporter: ['text', 'text-summary'],
