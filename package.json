@@ -7,18 +7,19 @@
   "engines": { "node": ">=22.12" },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "lint": "eslint src test",
+    "lint": "eslint src test scripts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --coverage",
     "test:watch": "vitest",
     "dev": "tsx src/server.ts",
+    "eval:grader": "tsx scripts/eval-grader.ts",
     "start": "node dist/server.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "0.39.0",
+    "@anthropic-ai/sdk": "0.135.0",
     "dotenv": "16.4.5",
     "express": "4.22.3",
-    "zod": "3.23.8"
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",

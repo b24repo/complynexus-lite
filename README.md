@@ -16,6 +16,7 @@ npm run lint
 npm test           # vitest with coverage thresholds (lines 80, functions 80, branches 75)
 npm run build
 npm run dev        # PORT=3000, copy .env.example to .env first
+npm run eval:grader  # manual, needs ANTHROPIC_API_KEY + ANTHROPIC_MODEL
 ```
 
 ## API
