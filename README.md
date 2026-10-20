@@ -7,6 +7,8 @@ with a rule-based grader, a thin JSON API and a server-rendered public verify pa
 Out of scope: endpoint test runner, auth, notifications and schedulers, fix-it plans, Mongo
 implementation, React UI. See `docs/adr/` for decisions.
 
+Next: see [docs/roadmap/sprint-1.md](docs/roadmap/sprint-1.md) for the Sprint 1 plan.
+
 ## Commands
 
 ```bash
