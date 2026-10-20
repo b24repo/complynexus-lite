@@ -23,6 +23,7 @@ export interface PublicRecordView {
   evidenceLevel: EvidenceLevel | null;
   guidedSize: GuidedSize | null;
   hash: string;
+  previousHashes: string[];
   showTestSummary: boolean;
   testSummary: TestSummary | null;
   openMustFixCount: number;
@@ -78,7 +79,7 @@ function boxes(v: PublicRecordView): string {
   return out.join('');
 }
 
-function facts(v: PublicRecordView): [string, string][] {
+export function facts(v: PublicRecordView): [string, string][] {
   const assessed: [string, string] = ['Assessed', D(v.assessedAt)];
   switch (v.status) {
     case 'Assessed':
@@ -92,6 +93,11 @@ function facts(v: PublicRecordView): [string, string][] {
     case 'Revoked':
       return [assessed, ['Last tested', v.lastTestedAt ? D(v.lastTestedAt) : 'Not yet'], ['Revoked on', D(v.revokedAt)]];
   }
+}
+
+function earlier(hashes: string[]): string {
+  if (!hashes.length) return '';
+  return `<details style="font-size:12px;color:#5B5E7A"><summary style="cursor:pointer">Earlier versions: ${hashes.length}</summary><ul style="padding-left:18px;word-break:break-all">${hashes.map((h) => `<li>SHA-256 ${esc(h)}</li>`).join('')}</ul></details>`;
 }
 
 export function renderVerifyHtml(v: PublicRecordView, publicHost = 'verify.complynexus.com'): string {
@@ -130,7 +136,8 @@ export function renderVerifyHtml(v: PublicRecordView, publicHost = 'verify.compl
 <p style="font-size:14px;line-height:1.6">${esc(paragraph(v))}</p>
 ${boxes(v)}
 <dl style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:20px 0 0">${dl}</dl>
-<p style="font-size:12px;color:#5B5E7A;word-break:break-all;margin-top:20px">SHA-256 ${esc(v.hash)} · compare with the hash printed on the PDF</p>
+<p style="font-size:12px;color:#5B5E7A;word-break:break-all;margin-top:20px">SHA-256 ${esc(v.hash)} · compare with the hash printed on the PDF (version ${v.version})</p>
+${earlier(v.previousHashes)}
 ${box(DISCLAIMER)}
 <details style="margin-top:16px;font-size:14px"><summary style="cursor:pointer;color:#4446E0">What does this record mean?</summary>
 <p style="line-height:1.6">The company described its AI agent, answered a readiness assessment and had the agent tested by ComplyNexus Lite. Statuses: Assessed (scored, not yet tested) → Current (latest test on record) → Re-test due (after a change or every 3 months) → Expired (30 days without a re-test). Revoked is withdrawn by ComplyNexus.</p></details>

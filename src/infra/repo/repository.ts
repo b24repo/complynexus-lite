@@ -1,4 +1,4 @@
-import type { Agent, Assessment, Founder, GuidedRun, LoginToken, ReadinessRecord, Session } from '../../domain/types';
+import type { Agent, Assessment, Founder, GuidedRun, LoginToken, ReadinessRecord, RecordVersion, Session } from '../../domain/types';
 
 export interface Repository<T extends { id: string }> {
   insert(item: T): Promise<T>;
@@ -20,6 +20,7 @@ export interface Repos {
   assessments: Repository<Assessment>;
   runs: Repository<GuidedRun>;
   records: Repository<ReadinessRecord>;
+  recordVersions: Repository<RecordVersion>;
   founders: Repository<Founder>;
   loginTokens: LoginTokenStore;
   sessions: Repository<Session>;

@@ -49,6 +49,6 @@ ${button('Declare a change', { kind: 'ghost' })}</form>
   return layout(
     { ...ctx, title: `${agent.name}`, script: true },
     `${header}${steps}<div class="card"><h2>Open items</h2>${items}</div>${verify}${change}
-<p><span class="btn ghost" aria-disabled="true">PDF (coming in S1-05)</span></p>`,
+${record ? `<p><a class="btn ghost" href="/api/records/${esc(record.recordId)}/pdf">Download PDF</a></p>` : ''}`,
   );
 }

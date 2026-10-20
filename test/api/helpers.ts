@@ -41,6 +41,7 @@ export async function setup(start = '2026-12-01T00:00:00Z', overrides: Partial<A
       assessments: new InMemoryRepository(),
       runs: new InMemoryRepository(),
       records: new InMemoryRepository(),
+      recordVersions: new InMemoryRepository(),
       founders: new InMemoryRepository(),
       loginTokens: new InMemoryLoginTokenStore(),
       sessions: new InMemoryRepository(),

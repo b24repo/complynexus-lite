@@ -1,6 +1,6 @@
 import type { AppDeps } from '../api/deps';
 import { HttpError } from '../api/errors';
-import { currentOpenItems, latestAssessment, latestCompletedRun, loadRecord, recordForAgent, requireAgent } from '../api/helpers';
+import { currentOpenItems, latestAssessment, latestCompletedRun, loadRecord, recordForAgent, requireAgent, saveNewVersion } from '../api/helpers';
 import type { AgentInput, AssessmentInput } from '../api/schemas';
 import { countByStatus, priorityLabel, readinessScore, riskBand } from '../domain/assessment';
 import { badgeEligibility } from '../domain/badge';
@@ -67,10 +67,10 @@ export async function submitAssessment(
   const openItems = await currentOpenItems(deps, assessment, await latestCompletedRun(deps, agent.id));
   const existing = await recordForAgent(deps, agent.id);
   if (existing) {
-    await deps.repos.records.update(applyReassessment(existing, { assessment, openItems, now }));
+    await saveNewVersion(deps, applyReassessment(existing, { assessment, openItems, now }), 'update');
   } else {
     const recordId = await deps.recordIds.next(now.getUTCFullYear());
-    await deps.repos.records.insert(createAssessedRecord({ agent, assessment, openItems, ids: { recordId }, now }));
+    await saveNewVersion(deps, createAssessedRecord({ agent, assessment, openItems, ids: { recordId }, now }), 'insert');
   }
   return assessmentView(deps, assessment);
 }

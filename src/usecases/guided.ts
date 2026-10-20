@@ -1,6 +1,6 @@
 import type { AppDeps } from '../api/deps';
 import { HttpError } from '../api/errors';
-import { currentOpenItems, latestAssessment, loadRecord, recordForAgent, requireAgent, requireRun } from '../api/helpers';
+import { currentOpenItems, latestAssessment, loadRecord, recordForAgent, requireAgent, requireRun, saveNewVersion } from '../api/helpers';
 import type { BatchInput, GuidedRunInput } from '../api/schemas';
 import { applyTestCompleted } from '../domain/record';
 import { testOpenItems } from '../domain/scoring';
@@ -78,7 +78,7 @@ export async function submitRunBatch(
       guidedSize: updated.size,
       now,
     });
-    await deps.repos.records.update(record);
+    await saveNewVersion(deps, record, 'update');
   }
   await deps.repos.runs.update(updated);
   const next = updated.batches.find((b) => !b.savedAt);

@@ -54,6 +54,17 @@ describe.skipIf(skip)('MongoRepository (mongodb-memory-server)', () => {
     await expect(col.insertOne({ _id: 'x2', id: 'x2', recordId: 'CNL-2026-0001', agentId: 'b' })).rejects.toThrow(/E11000/);
   });
 
+  it('record_versions has a unique recordId+version index', async () => {
+    await ensureMongoIndexes(db);
+    expect(COLLECTIONS.recordVersions).toBe('record_versions');
+    const idx = (await db.collection(COLLECTIONS.recordVersions).indexes()).find((i) => i.name === 'uniq_recordId_version');
+    expect(idx?.unique).toBe(true);
+    const repo = createMongoRepos(db).recordVersions;
+    const row = { id: 'CNL-2026-0001@1', recordId: 'CNL-2026-0001', version: 1, hash: 'h', snapshot: {} as never, createdAt: 'now' };
+    await repo.insert(row);
+    await expect(repo.insert(row)).rejects.toThrow(/Duplicate id/);
+  });
+
   it('creates the auth indexes: unique founder email and TTL on tokens and sessions', async () => {
     await ensureMongoIndexes(db);
     const founderIdx = await db.collection(COLLECTIONS.founders).indexes();
