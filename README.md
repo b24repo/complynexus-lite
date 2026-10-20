@@ -62,6 +62,8 @@ curl -s -X POST $B/api/agents/$A/guided-runs -H 'content-type: application/json'
 
 ## Porting
 
+Set `RESEND_API_KEY` and `MAIL_FROM` to send email through Resend; otherwise notifications are printed.
+
 `MongoRepository` is implemented (`src/infra/repo/mongo.ts`, ADR-0005). Set `MONGODB_URI` (and
 optionally `MONGODB_DB`) to use it, otherwise the server runs in memory; indexes are created at
 boot. Remaining porting work: a scheduler that runs `applyTimeTransitions` over all records

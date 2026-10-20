@@ -7,6 +7,8 @@ import type { RecordIdSource } from '../infra/ids';
 import { InMemoryRepository } from '../infra/repo/inMemory';
 import { connectMongo } from '../infra/repo/mongoClient';
 import type { MongoConnection } from '../infra/repo/mongoClient';
+import { createNotifier } from '../infra/notify/notifier';
+import type { Notifier } from '../infra/notify/notifier';
 import { MongoRecordIdSource } from '../infra/repo/mongoIds';
 import { createMongoRepos, ensureMongoIndexes } from '../infra/repo/mongo';
 import type { Repos } from '../infra/repo/repository';
@@ -16,10 +18,11 @@ export interface AppDeps {
   recordIds: RecordIdSource;
   clock: Clock;
   grader: Grader;
+  notifier: Notifier;
   adminKey?: string;
 }
 
-export function createDefaultDeps(): AppDeps {
+export function createDefaultDeps(env: NodeJS.ProcessEnv = process.env): AppDeps {
   return {
     repos: {
       agents: new InMemoryRepository(),
@@ -30,12 +33,17 @@ export function createDefaultDeps(): AppDeps {
     recordIds: new InMemoryRecordIdSource(),
     clock: new SystemClock(),
     grader: createGrader(),
+    notifier: createNotifier(env),
     adminKey: process.env.ADMIN_KEY,
   };
 }
 
 /** Mongo-backed deps. Caller owns `connection` and must close it on shutdown. */
-export async function createMongoDeps(uri: string, dbName: string): Promise<{ deps: AppDeps; connection: MongoConnection }> {
+export async function createMongoDeps(
+  uri: string,
+  dbName: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<{ deps: AppDeps; connection: MongoConnection }> {
   const connection = await connectMongo(uri, dbName);
   await ensureMongoIndexes(connection.db);
   const deps: AppDeps = {
@@ -43,6 +51,7 @@ export async function createMongoDeps(uri: string, dbName: string): Promise<{ de
     recordIds: new MongoRecordIdSource(connection.db),
     clock: new SystemClock(),
     grader: createGrader(),
+    notifier: createNotifier(env),
     adminKey: process.env.ADMIN_KEY,
   };
   return { deps, connection };

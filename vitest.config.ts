@@ -11,6 +11,7 @@ export default defineConfig({
         'src/grading/redact.ts',
         'src/grading/ruleBased.ts',
         'src/library/**',
+        'src/infra/notify/**',
       ],
       exclude: ['src/grading/claude.ts', 'src/infra/repo/mongo.ts', 'src/server.ts'],
       reporter: ['text', 'text-summary'],
