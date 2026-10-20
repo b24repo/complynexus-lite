@@ -149,6 +149,16 @@ export interface ReadinessRecord extends RecordSnapshot {
   updatedAt: string;
 }
 
+/** Append-only history: one row per record version (ADR-0010). id = `${recordId}@${version}`. */
+export interface RecordVersion {
+  id: string;
+  recordId: string;
+  version: number;
+  hash: string;
+  snapshot: RecordSnapshot;
+  createdAt: string;
+}
+
 export interface Founder {
   id: string;
   email: string;

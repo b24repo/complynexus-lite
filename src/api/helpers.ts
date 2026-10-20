@@ -5,6 +5,7 @@ import { HttpError } from './errors';
 import { applyTimeTransitions } from '../domain/record';
 import { mergeOpenItems, testOpenItems } from '../domain/scoring';
 import { assessmentOpenItems } from '../domain/assessment';
+import { toSnapshot } from '../domain/hash';
 import type { Agent, Assessment, GuidedRun, OpenItem, ReadinessRecord } from '../domain/types';
 import { loadLibrary } from '../library/library';
 
@@ -40,6 +41,33 @@ export async function currentOpenItems(deps: AppDeps, assessment: Assessment, ru
   const fromAssessment = assessmentOpenItems(assessment.answers);
   const fromTests = run ? testOpenItems(run.results, loadLibrary()) : [];
   return mergeOpenItems(fromAssessment, fromTests);
+}
+
+/**
+ * Persists a record AND appends its version row (ADR-0010). Call only where a new hashed version is produced:
+ * createAssessedRecord (insert), applyReassessment and applyTestCompleted (update). Idempotent on the history row.
+ */
+export async function saveNewVersion(deps: AppDeps, record: ReadinessRecord, mode: 'insert' | 'update'): Promise<ReadinessRecord> {
+  const saved = mode === 'insert' ? await deps.repos.records.insert(record) : await deps.repos.records.update(record);
+  try {
+    await deps.repos.recordVersions.insert({
+      id: `${saved.recordId}@${saved.version}`,
+      recordId: saved.recordId,
+      version: saved.version,
+      hash: saved.hash,
+      snapshot: toSnapshot(saved),
+      createdAt: saved.updatedAt,
+    });
+  } catch (err) {
+    if (!(err instanceof Error && err.message.startsWith('Duplicate id'))) throw err;
+  }
+  return saved;
+}
+
+/** Hashes of earlier versions, newest first. */
+export async function previousHashes(deps: AppDeps, record: ReadinessRecord): Promise<string[]> {
+  const all = await deps.repos.recordVersions.find((v) => v.version < record.version, { recordId: record.recordId });
+  return all.sort((a, b) => b.version - a.version).map((v) => v.hash);
 }
 
 /** Loads a record and applies lazy time transitions, persisting when they changed it. */

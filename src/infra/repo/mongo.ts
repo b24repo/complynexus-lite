@@ -6,7 +6,7 @@
 import { MongoServerError } from 'mongodb';
 import type { Collection, Db, Filter } from 'mongodb';
 import type { LoginTokenStore, Repository, Repos } from './repository';
-import type { Agent, Assessment, Founder, GuidedRun, LoginToken, ReadinessRecord, Session } from '../../domain/types';
+import type { Agent, Assessment, Founder, GuidedRun, LoginToken, ReadinessRecord, RecordVersion, Session } from '../../domain/types';
 
 type Doc<T> = T & { _id: string };
 
@@ -15,6 +15,7 @@ export const COLLECTIONS = {
   assessments: 'assessments',
   runs: 'guided_runs',
   records: 'readiness_records',
+  recordVersions: 'record_versions',
   founders: 'founders',
   loginTokens: 'login_tokens',
   sessions: 'sessions',
@@ -90,6 +91,7 @@ export function createMongoRepos(db: Db): Repos {
     assessments: new MongoRepository<Assessment>(db, COLLECTIONS.assessments),
     runs: new MongoRepository<GuidedRun>(db, COLLECTIONS.runs),
     records: new MongoRepository<ReadinessRecord>(db, COLLECTIONS.records),
+    recordVersions: new MongoRepository<RecordVersion>(db, COLLECTIONS.recordVersions),
     founders: new MongoRepository<Founder>(db, COLLECTIONS.founders),
     loginTokens: new MongoLoginTokenStore(db, COLLECTIONS.loginTokens),
     sessions: new MongoRepository<Session>(db, COLLECTIONS.sessions),
@@ -101,6 +103,7 @@ export async function ensureMongoIndexes(db: Db): Promise<void> {
   await db.collection(COLLECTIONS.records).createIndex({ recordId: 1 }, { unique: true, name: 'uniq_recordId' });
   await db.collection(COLLECTIONS.records).createIndex({ agentId: 1 }, { name: 'agentId' });
   await db.collection(COLLECTIONS.records).createIndex({ status: 1 }, { name: 'status' });
+  await db.collection(COLLECTIONS.recordVersions).createIndex({ recordId: 1, version: -1 }, { unique: true, name: 'uniq_recordId_version' });
   await db.collection(COLLECTIONS.assessments).createIndex({ agentId: 1, version: -1 }, { name: 'agentId_version' });
   await db.collection(COLLECTIONS.runs).createIndex({ agentId: 1, runNumber: -1 }, { name: 'agentId_runNumber' });
   // The unique login token hash is the document _id, so it needs no extra index.

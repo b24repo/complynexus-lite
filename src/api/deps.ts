@@ -79,6 +79,7 @@ export function createDefaultDeps(env: NodeJS.ProcessEnv = process.env, logger: 
       assessments: new InMemoryRepository(),
       runs: new InMemoryRepository(),
       records: new InMemoryRepository(),
+      recordVersions: new InMemoryRepository(),
       founders: new InMemoryRepository(),
       loginTokens: new InMemoryLoginTokenStore(),
       sessions: new InMemoryRepository(),

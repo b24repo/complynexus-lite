@@ -15,6 +15,7 @@ export default defineConfig({
         'src/web/**',
         'src/infra/notify/**',
         'src/jobs/transitions.ts',
+        'src/pdf/**',
         'src/api/middleware/**',
         'src/infra/tokens.ts',
       ],

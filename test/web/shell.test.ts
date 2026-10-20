@@ -139,6 +139,7 @@ describe('agent overview', () => {
     expect(html).toContain('Start assessment');
     expect(html).toContain('No open items.');
     expect(html).not.toContain('verify-url');
+    expect(html).not.toContain('Download PDF');
 
     await assess(app, id);
     html = (await app.get(`/app/agents/${id}`)).text;
@@ -150,6 +151,7 @@ describe('agent overview', () => {
     expect(html).toContain('data-copy-target="#verify-url"');
     expect(html).toContain('<script src="/app/static/app.js"');
     expect(html).toContain('Start test');
+    expect(html).toMatch(/href="\/api\/records\/CNL-[0-9-]+\/pdf">Download PDF/);
 
     const recordId = /\/verify\/(CNL-[0-9-]+)"/.exec(html)![1];
     const csrf = csrfOf(html);

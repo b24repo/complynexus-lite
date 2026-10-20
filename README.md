@@ -39,10 +39,11 @@ docker build --build-arg GIT_COMMIT=$(git rev-parse --short HEAD) -t complynexus
 | `GET /api/guided-runs/:runId/results` | summary, failed cases, not-run groups |
 | `GET /api/records/:recordId` | record after time transitions |
 | `GET /api/records/:recordId/badge` | badge eligibility |
+| `GET /api/records/:recordId/pdf` | founder-only PDF of the record; its hash equals `/verify/:recordId.json` (ADR-0010) |
 | `PATCH /api/records/:recordId/public` | show or hide the test summary |
 | `POST /api/records/:recordId/revoke` | admin only, header `X-Admin-Key` |
 | `POST /jobs/transitions` | admin only, header `X-Admin-Key`; body `{ dryRun?, now? }` (`now` only with `dryRun`); runs the re-test/expiry transitions and emails (409 `JOB_RUNNING` if already running) |
-| `GET /verify/:recordId`, `GET /verify/:recordId.json` | public page and public JSON |
+| `GET /verify/:recordId`, `GET /verify/:recordId.json` | public page and public JSON (JSON includes `previousHashes`, earlier version hashes newest first) |
 
 `/api/agents*`, `/api/guided-runs*` and the founder record routes (`GET /api/records/:recordId`,
 `/badge`, `PATCH /public`) need the session cookie or `Authorization: Bearer <session token>`; a founder
