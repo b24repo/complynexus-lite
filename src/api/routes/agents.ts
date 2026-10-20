@@ -2,6 +2,7 @@ import type { Router } from 'express';
 import type { AppDeps } from '../deps';
 import { asyncRouter } from '../helpers';
 import { HttpError } from '../errors';
+import { founderOf } from '../middleware/auth';
 import { AgentBody, AssessmentBody, ChangeBody } from '../schemas';
 import { currentOpenItems, latestAssessment, latestCompletedRun, recordForAgent, requireAgent } from '../helpers';
 import { countByStatus, priorityLabel, readinessScore, riskBand } from '../../domain/assessment';
@@ -29,16 +30,16 @@ export function agentRoutes(deps: AppDeps): Router {
 
   router.post('/', async (req, res) => {
     const body = AgentBody.parse(req.body);
-    const agent: Agent = { id: uuid(), ...body, createdAt: deps.clock.now().toISOString() };
+    const agent: Agent = { id: uuid(), founderId: founderOf(res).id, ...body, createdAt: deps.clock.now().toISOString() };
     res.status(201).json(await deps.repos.agents.insert(agent));
   });
 
   router.get('/:id', async (req, res) => {
-    res.json(await requireAgent(deps, req.params.id));
+    res.json(await requireAgent(deps, req.params.id, founderOf(res).id));
   });
 
   router.post('/:id/assessment', async (req, res) => {
-    const agent = await requireAgent(deps, req.params.id);
+    const agent = await requireAgent(deps, req.params.id, founderOf(res).id);
     const { answers } = AssessmentBody.parse(req.body);
     const score = readinessScore(answers);
     const now = deps.clock.now();
@@ -65,14 +66,14 @@ export function agentRoutes(deps: AppDeps): Router {
   });
 
   router.get('/:id/assessment', async (req, res) => {
-    const agent = await requireAgent(deps, req.params.id);
+    const agent = await requireAgent(deps, req.params.id, founderOf(res).id);
     const assessment = await latestAssessment(deps, agent.id);
     if (!assessment) throw new HttpError(404, 'ASSESSMENT_NOT_FOUND');
     res.json(await assessmentView(assessment));
   });
 
   router.post('/:id/changes', async (req, res) => {
-    const agent = await requireAgent(deps, req.params.id);
+    const agent = await requireAgent(deps, req.params.id, founderOf(res).id);
     ChangeBody.parse(req.body);
     const now = deps.clock.now();
     const existing = await recordForAgent(deps, agent.id);

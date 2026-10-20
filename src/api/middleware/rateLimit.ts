@@ -1,12 +1,12 @@
-import type { RequestHandler } from 'express';
+import type { Request, RequestHandler } from 'express';
 
-/** Fixed-window in-memory limiter keyed by client IP. One instance per app, so counts reset on restart. */
-export function rateLimit(opts: { limit: number; windowMs: number; now?: () => number }): RequestHandler {
+/** Fixed-window in-memory limiter keyed by client IP (or `key`). One instance per app, so counts reset on restart. */
+export function rateLimit(opts: { limit: number; windowMs: number; now?: () => number; key?: (req: Request) => string }): RequestHandler {
   const buckets = new Map<string, { count: number; resetAt: number }>();
   const now = opts.now ?? Date.now;
   return (req, res, next) => {
     const t = now();
-    const key = req.ip ?? 'unknown';
+    const key = opts.key ? opts.key(req) : (req.ip ?? 'unknown');
     let b = buckets.get(key);
     if (!b || t >= b.resetAt) {
       b = { count: 0, resetAt: t + opts.windowMs };

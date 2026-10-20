@@ -40,7 +40,7 @@ export function verifyRoutes(deps: AppDeps): Router {
   const publicHost = deps.publicBaseUrl ? new URL(deps.publicBaseUrl).host : undefined;
 
   router.get('/:recordId.json', async (req, res) => {
-    const r = toPublicView(await loadRecord(deps, req.params.recordId));
+    const r = toPublicView(await loadRecord(deps, req.params.recordId, null));
     res.json({
       recordId: r.recordId,
       version: r.version,
@@ -64,7 +64,7 @@ export function verifyRoutes(deps: AppDeps): Router {
 
   router.get('/:recordId', async (req, res) => {
     try {
-      const view = toPublicView(await loadRecord(deps, req.params.recordId));
+      const view = toPublicView(await loadRecord(deps, req.params.recordId, null));
       res.type('html').send(renderVerifyHtml(view, publicHost));
     } catch (e) {
       if (e instanceof HttpError && e.status === 404) {

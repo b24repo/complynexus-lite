@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CONTROLS } from '../domain/controls';
+import { TOKEN_RE } from '../infra/tokens';
 
 const controlIds = CONTROLS.map((c) => c.id) as [string, ...string[]];
 
@@ -50,3 +51,6 @@ export const BatchBody = z.object({
 
 export const PublicBody = z.object({ showTestSummary: z.boolean() });
 export const RevokeBody = z.object({ reason: z.string().min(1) });
+
+export const EmailBody = z.object({ email: z.string().trim().toLowerCase().email().max(254) });
+export const CallbackQuery = z.object({ token: z.string().regex(TOKEN_RE) });

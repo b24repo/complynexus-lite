@@ -2,8 +2,9 @@ import { MongoClient } from 'mongodb';
 import type { Db } from 'mongodb';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { COLLECTIONS, MongoRepository, createMongoRepos, ensureMongoIndexes } from '../../../src/infra/repo/mongo';
+import { COLLECTIONS, MongoLoginTokenStore, MongoRepository, createMongoRepos, ensureMongoIndexes } from '../../../src/infra/repo/mongo';
 import { MongoRecordIdSource } from '../../../src/infra/repo/mongoIds';
+import { loginTokenStoreContract } from './loginTokenStoreContract';
 import { repositoryContract } from './repositoryContract';
 import type { Doc } from './repositoryContract';
 
@@ -29,12 +30,17 @@ describe.skipIf(skip)('MongoRepository (mongodb-memory-server)', () => {
 
   repositoryContract('MongoRepository', async () => new MongoRepository<Doc>(db, `contract_${++n}`));
 
+  loginTokenStoreContract('MongoLoginTokenStore', async () => new MongoLoginTokenStore(db, `tokens_${++n}`));
+
   it('createMongoRepos uses the production collection names', async () => {
     const repos = createMongoRepos(db);
     expect((repos.agents as MongoRepository<never>).collectionName).toBe('agents');
     expect((repos.assessments as MongoRepository<never>).collectionName).toBe('assessments');
     expect((repos.runs as MongoRepository<never>).collectionName).toBe('guided_runs');
     expect((repos.records as MongoRepository<never>).collectionName).toBe('readiness_records');
+    expect((repos.founders as MongoRepository<never>).collectionName).toBe('founders');
+    expect((repos.loginTokens as unknown as MongoRepository<never>).collectionName).toBe('login_tokens');
+    expect((repos.sessions as MongoRepository<never>).collectionName).toBe('sessions');
   });
 
   it('ensureMongoIndexes is idempotent and enforces a unique recordId', async () => {
@@ -45,6 +51,22 @@ describe.skipIf(skip)('MongoRepository (mongodb-memory-server)', () => {
     const col = db.collection<{ _id: string; id: string; recordId: string; agentId: string }>(COLLECTIONS.records);
     await col.insertOne({ _id: 'x1', id: 'x1', recordId: 'CNL-2026-0001', agentId: 'a' });
     await expect(col.insertOne({ _id: 'x2', id: 'x2', recordId: 'CNL-2026-0001', agentId: 'b' })).rejects.toThrow(/E11000/);
+  });
+
+  it('creates the auth indexes: unique founder email and TTL on tokens and sessions', async () => {
+    await ensureMongoIndexes(db);
+    const founderIdx = await db.collection(COLLECTIONS.founders).indexes();
+    expect(founderIdx.find((i) => i.name === 'uniq_email')?.unique).toBe(true);
+    for (const c of [COLLECTIONS.loginTokens, COLLECTIONS.sessions]) {
+      const ttl = (await db.collection(c).indexes()).find((i) => i.name === 'ttl_expiresAt');
+      expect(ttl?.expireAfterSeconds).toBe(0);
+    }
+    const repos = createMongoRepos(client.db('auth_idx'));
+    await ensureMongoIndexes(client.db('auth_idx'));
+    await repos.founders.insert({ id: 'f1', email: 'a@example.com', createdAt: '2026-12-01T00:00:00.000Z' });
+    await expect(
+      repos.founders.insert({ id: 'f2', email: 'a@example.com', createdAt: '2026-12-01T00:00:00.000Z' }),
+    ).rejects.toThrow(/Duplicate id/);
   });
 
   describe('MongoRecordIdSource', () => {

@@ -1,12 +1,12 @@
 /**
  * MongoRepository (ADR-0005). Documents are stored as `{ _id: item.id, ...item }`;
  * `_id` is stripped on read. All timestamps in the domain are ISO strings and are
- * stored/returned verbatim. Writes clone the input; reads return fresh objects.
+ * stored/returned verbatim, except LoginToken/Session expiresAt/usedAt, which are Dates for TTL indexes (ADR-0007). Writes clone the input; reads return fresh objects.
  */
 import { MongoServerError } from 'mongodb';
 import type { Collection, Db, Filter } from 'mongodb';
-import type { Repository, Repos } from './repository';
-import type { Agent, Assessment, GuidedRun, ReadinessRecord } from '../../domain/types';
+import type { LoginTokenStore, Repository, Repos } from './repository';
+import type { Agent, Assessment, Founder, GuidedRun, LoginToken, ReadinessRecord, Session } from '../../domain/types';
 
 type Doc<T> = T & { _id: string };
 
@@ -15,6 +15,9 @@ export const COLLECTIONS = {
   assessments: 'assessments',
   runs: 'guided_runs',
   records: 'readiness_records',
+  founders: 'founders',
+  loginTokens: 'login_tokens',
+  sessions: 'sessions',
 } as const;
 
 function strip<T extends { id: string }>(doc: Doc<T>): T {
@@ -23,7 +26,7 @@ function strip<T extends { id: string }>(doc: Doc<T>): T {
 }
 
 export class MongoRepository<T extends { id: string }> implements Repository<T> {
-  private readonly col: Collection<Doc<T>>;
+  protected readonly col: Collection<Doc<T>>;
 
   constructor(
     db: Db,
@@ -63,6 +66,22 @@ export class MongoRepository<T extends { id: string }> implements Repository<T> 
   async count(): Promise<number> {
     return this.col.countDocuments({});
   }
+
+  async delete(id: string): Promise<boolean> {
+    const r = await this.col.deleteOne({ _id: id } as Filter<Doc<T>>);
+    return r.deletedCount === 1;
+  }
+}
+
+export class MongoLoginTokenStore extends MongoRepository<LoginToken> implements LoginTokenStore {
+  async consume(tokenHash: string, now: Date): Promise<LoginToken | null> {
+    const doc = await this.col.findOneAndUpdate(
+      { _id: tokenHash, usedAt: null, expiresAt: { $gt: now } } as Filter<Doc<LoginToken>>,
+      { $set: { usedAt: now } } as never,
+      { returnDocument: 'after' },
+    );
+    return doc ? strip(doc as Doc<LoginToken>) : null;
+  }
 }
 
 export function createMongoRepos(db: Db): Repos {
@@ -71,6 +90,9 @@ export function createMongoRepos(db: Db): Repos {
     assessments: new MongoRepository<Assessment>(db, COLLECTIONS.assessments),
     runs: new MongoRepository<GuidedRun>(db, COLLECTIONS.runs),
     records: new MongoRepository<ReadinessRecord>(db, COLLECTIONS.records),
+    founders: new MongoRepository<Founder>(db, COLLECTIONS.founders),
+    loginTokens: new MongoLoginTokenStore(db, COLLECTIONS.loginTokens),
+    sessions: new MongoRepository<Session>(db, COLLECTIONS.sessions),
   };
 }
 
@@ -80,4 +102,10 @@ export async function ensureMongoIndexes(db: Db): Promise<void> {
   await db.collection(COLLECTIONS.records).createIndex({ agentId: 1 }, { name: 'agentId' });
   await db.collection(COLLECTIONS.assessments).createIndex({ agentId: 1, version: -1 }, { name: 'agentId_version' });
   await db.collection(COLLECTIONS.runs).createIndex({ agentId: 1, runNumber: -1 }, { name: 'agentId_runNumber' });
+  // The unique login token hash is the document _id, so it needs no extra index.
+  await db.collection(COLLECTIONS.founders).createIndex({ email: 1 }, { unique: true, name: 'uniq_email' });
+  await db.collection(COLLECTIONS.loginTokens).createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: 'ttl_expiresAt' });
+  await db.collection(COLLECTIONS.sessions).createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: 'ttl_expiresAt' });
+  await db.collection(COLLECTIONS.sessions).createIndex({ founderId: 1 }, { name: 'founderId' });
+  await db.collection(COLLECTIONS.agents).createIndex({ founderId: 1 }, { name: 'founderId' });
 }
