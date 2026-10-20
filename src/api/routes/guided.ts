@@ -9,7 +9,7 @@ export function guidedRoutes(deps: AppDeps): Router {
   const router = asyncRouter();
 
   router.post('/agents/:id/guided-runs', async (req, res) => {
-    res.status(201).json(await startRun(deps, req.params.id, founderOf(res).id, GuidedRunBody.parse(req.body)));
+    res.status(201).json(await startRun(deps, req.params.id, founderOf(res).id, () => GuidedRunBody.parse(req.body)));
   });
 
   router.get('/guided-runs/:runId', async (req, res) => {
@@ -17,8 +17,8 @@ export function guidedRoutes(deps: AppDeps): Router {
   });
 
   router.post('/guided-runs/:runId/batches/:index', async (req, res) => {
-    const { entries } = BatchBody.parse(req.body);
-    res.json(await submitRunBatch(deps, req.params.runId, founderOf(res).id, Number(req.params.index), entries));
+    const parseEntries = () => BatchBody.parse(req.body).entries;
+    res.json(await submitRunBatch(deps, req.params.runId, founderOf(res).id, Number(req.params.index), parseEntries));
   });
 
   router.get('/guided-runs/:runId/results', async (req, res) => {

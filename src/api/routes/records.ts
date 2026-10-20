@@ -19,8 +19,8 @@ export function recordRoutes(deps: AppDeps): Router {
   });
 
   router.patch('/:recordId/public', auth, async (req, res) => {
-    const { showTestSummary } = PublicBody.parse(req.body);
-    res.json(await setPublic(deps, req.params.recordId, founderOf(res).id, showTestSummary));
+    const parse = () => PublicBody.parse(req.body).showTestSummary;
+    res.json(await setPublic(deps, req.params.recordId, founderOf(res).id, parse));
   });
 
   router.post('/:recordId/revoke', async (req, res) => {

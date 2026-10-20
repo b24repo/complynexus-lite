@@ -23,9 +23,10 @@ export async function setPublic(
   deps: AppDeps,
   recordId: string,
   owner: string | null,
-  showTestSummary: boolean,
+  parseShowTestSummary: () => boolean,
 ): Promise<ReadinessRecord> {
   const record = await loadRecord(deps, recordId, owner);
+  const showTestSummary = parseShowTestSummary(); // after ownership: other founders get 404, never 400
   return deps.repos.records.update({ ...record, showTestSummary, updatedAt: deps.clock.now().toISOString() });
 }
 

@@ -18,7 +18,7 @@ describe('usecase read models', () => {
     clock.set('2026-12-02T00:00:00Z');
     const b = await createAgent(deps, 'f1', { ...agentBody, tools: [...agentBody.tools], name: 'second' });
     await createAgent(deps, 'f2', { ...agentBody, tools: [...agentBody.tools], name: 'other' });
-    await submitAssessment(deps, a.id, 'f1', { answers: bookbotAnswers });
+    await submitAssessment(deps, a.id, 'f1', () => ({ answers: bookbotAnswers }));
 
     const list = await listAgentsForFounder(deps, 'f1');
     expect(list.map((i) => i.agent.id)).toEqual([b.id, a.id]);
@@ -33,8 +33,8 @@ describe('usecase read models', () => {
     const empty = await agentOverview(deps, agent.id, 'f1');
     expect(empty).toMatchObject({ assessment: null, record: null, badge: null, activeRun: null, openItems: [] });
 
-    await submitAssessment(deps, agent.id, 'f1', { answers: bookbotAnswers });
-    const run = await startRun(deps, agent.id, 'f1', runBody);
+    await submitAssessment(deps, agent.id, 'f1', () => ({ answers: bookbotAnswers }));
+    const run = await startRun(deps, agent.id, 'f1', () => runBody);
     const full = await agentOverview(deps, agent.id, 'f1');
     expect(full.assessment).not.toBeNull();
     expect(full.badge).not.toBeNull();

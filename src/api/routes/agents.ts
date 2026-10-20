@@ -17,7 +17,7 @@ export function agentRoutes(deps: AppDeps): Router {
   });
 
   router.post('/:id/assessment', async (req, res) => {
-    res.status(201).json(await submitAssessment(deps, req.params.id, founderOf(res).id, AssessmentBody.parse(req.body)));
+    res.status(201).json(await submitAssessment(deps, req.params.id, founderOf(res).id, () => AssessmentBody.parse(req.body)));
   });
 
   router.get('/:id/assessment', async (req, res) => {
@@ -25,8 +25,7 @@ export function agentRoutes(deps: AppDeps): Router {
   });
 
   router.post('/:id/changes', async (req, res) => {
-    ChangeBody.parse(req.body);
-    res.json(await declareChange(deps, req.params.id, founderOf(res).id));
+    res.json(await declareChange(deps, req.params.id, founderOf(res).id, () => void ChangeBody.parse(req.body)));
   });
 
   return router;

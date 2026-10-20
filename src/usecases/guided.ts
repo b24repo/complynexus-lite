@@ -24,8 +24,9 @@ export const expandBatch = (b: GuidedRun['batches'][number]): ExpandedBatch => (
 
 export const expandRun = (run: GuidedRun): ExpandedRun => ({ ...run, batches: run.batches.map(expandBatch) });
 
-export async function startRun(deps: AppDeps, agentId: string, owner: string | null, input: GuidedRunInput): Promise<GuidedRun> {
+export async function startRun(deps: AppDeps, agentId: string, owner: string | null, parseInput: () => GuidedRunInput): Promise<GuidedRun> {
   const agent = await requireAgent(deps, agentId, owner);
+  const input = parseInput(); // after ownership: other founders get 404, never 400
   const assessment = await latestAssessment(deps, agent.id);
   if (!assessment) throw new DomainError('ASSESSMENT_REQUIRED');
   const existing = await recordForAgent(deps, agent.id);
@@ -52,9 +53,10 @@ export async function submitRunBatch(
   runId: string,
   owner: string | null,
   index: number,
-  entries: BatchInput['entries'],
+  parseEntries: () => BatchInput['entries'],
 ): Promise<BatchOutcome> {
   const run = await requireRun(deps, runId, owner);
+  const entries = parseEntries(); // after ownership: other founders get 404, never 400
   const now = deps.clock.now();
   const updated = await submitBatch(run, index, entries, deps.grader, now);
   const batch = updated.batches.find((b) => b.index === index)!;

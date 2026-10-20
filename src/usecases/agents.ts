@@ -45,10 +45,11 @@ export async function submitAssessment(
   deps: AppDeps,
   agentId: string,
   owner: string | null,
-  input: AssessmentInput,
+  parseInput: () => AssessmentInput,
 ): Promise<AssessmentView> {
   const agent = await requireAgent(deps, agentId, owner);
-  const { answers } = input;
+  // Validate only after ownership is resolved so other founders' ids stay hidden (404, never 400).
+  const { answers } = parseInput();
   const score = readinessScore(answers);
   const now = deps.clock.now();
   const previous = await latestAssessment(deps, agent.id);
@@ -84,8 +85,10 @@ export async function declareChange(
   deps: AppDeps,
   agentId: string,
   owner: string | null,
+  validate: () => void = () => undefined,
 ): Promise<{ agent: Agent; record: ReadinessRecord | null }> {
   const agent = await requireAgent(deps, agentId, owner);
+  validate();
   const now = deps.clock.now();
   const existing = await recordForAgent(deps, agent.id);
   let record: ReadinessRecord | null = null;
