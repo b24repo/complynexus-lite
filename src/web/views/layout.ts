@@ -77,7 +77,8 @@ input[type=text],input[type=email],input[type=number],select,textarea{width:100%
 .muted{color:#5B5E7A;font-size:13px}pre.prompt{white-space:pre-wrap;background:#F7F7FC;border:1px solid #E4E5F5;border-radius:8px;padding:12px;font:inherit}
 fieldset{border:0;padding:0;margin:12px 0}legend{font-weight:600}.radios label{display:inline-block;margin-right:12px}
 ul.agents{list-style:none;padding:0}.actions{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
-@media (max-width:420px){main{margin:12px auto}.card{padding:16px}}`;
+table{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid #E4E5F5}th{font-size:13px;color:#5B5E7A;font-weight:600}.num{white-space:nowrap;text-align:right}
+@media (max-width:420px){main{margin:12px auto}.card{padding:16px}th,td{padding:6px 8px}}`;
 
 export function layout(opts: LayoutOpts, body: string): string {
   const signOut = opts.founderEmail

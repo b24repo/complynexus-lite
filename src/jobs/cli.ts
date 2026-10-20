@@ -6,7 +6,7 @@ import { createLogger } from '../infra/logger';
 import { runTransitions } from './transitions';
 
 async function main(): Promise<number> {
-  const log = createLogger(process.env);
+  const log = createLogger(process.env, { stderr: true });
   let args;
   try {
     args = parseArgs({ options: { 'dry-run': { type: 'boolean', default: false }, now: { type: 'string' } } }).values;
@@ -52,6 +52,6 @@ async function main(): Promise<number> {
 main()
   .then((code) => process.exit(code))
   .catch((err) => {
-    createLogger(process.env).fatal({ err }, 'transitions job crashed');
+    createLogger(process.env, { stderr: true }).fatal({ err }, 'transitions job crashed');
     process.exit(1);
   });
